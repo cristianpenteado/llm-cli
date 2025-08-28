@@ -4,6 +4,7 @@ import { ProjectConfig, ProjectStructure, LanguageDetection } from '../types';
 import { LanguageDetector } from '../utils/LanguageDetector';
 import { Logger } from '../utils/Logger';
 import { ConfigManager } from '../utils/ConfigManager';
+import { Banner } from '../utils/Banner';
 
 export class ProjectManager {
   private languageDetector: LanguageDetector;
@@ -18,6 +19,7 @@ export class ProjectManager {
    * Inicializa um novo projeto na pasta atual
    */
   async initializeProject(options: { model?: string; force?: boolean }): Promise<ProjectConfig> {
+    Banner.showInit();
     const currentPath = process.cwd();
     
     // Verificar se já existe um projeto
@@ -548,7 +550,7 @@ Este projeto foi configurado com a LLM CLI para desenvolvimento assistido por IA
    * Pergunta ao usuário se ele quer carregar ou sobrescrever o projeto existente.
    */
   private async askUserAction(): Promise<{ action: 'load' | 'overwrite' | 'cancel' }> {
-    const inquirer = require('inquirer');
+    const inquirer = (await import('inquirer')).default;
     
     const { action } = await inquirer.prompt([
       {

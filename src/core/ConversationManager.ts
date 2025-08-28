@@ -1,6 +1,7 @@
 import { ModelManager } from './ModelManager';
 import { ChatSession, ChatMessage, ChatCommand, ProjectContext } from '../types';
 import { Logger } from '../utils/Logger';
+import { Banner } from '../utils/Banner';
 
 import * as fs from 'fs-extra';
 import * as path from 'path';
@@ -90,7 +91,7 @@ export class ConversationManager {
    * Pergunta algo ao usuário
    */
   async askUser(options: { type: 'confirm'; message: string; default?: boolean }): Promise<{ shouldInit: boolean }> {
-    const inquirer = require('inquirer');
+    const inquirer = (await import('inquirer')).default;
     
     const { shouldInit } = await inquirer.prompt([
       {
@@ -108,6 +109,7 @@ export class ConversationManager {
    * Inicia uma nova conversa
    */
   async startConversation(modelName: string): Promise<void> {
+    Banner.showChat();
     Logger.info('💬 Iniciando nova conversa...');
 
     try {
@@ -146,7 +148,7 @@ export class ConversationManager {
    * Loop principal da conversa
    */
   private async conversationLoop(): Promise<void> {
-    const inquirer = require('inquirer');
+    const inquirer = (await import('inquirer')).default;
     
     while (true) {
       try {
@@ -232,7 +234,7 @@ export class ConversationManager {
     });
 
     // Perguntar se o usuário quer aplicar as mudanças
-    const inquirer = require('inquirer');
+    const inquirer = (await import('inquirer')).default;
     
     const { shouldApply } = await inquirer.prompt([
       {

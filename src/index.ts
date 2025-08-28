@@ -9,8 +9,12 @@ import { FileManager } from './core/FileManager';
 import { MCPClient } from './mcp/MCPClient';
 import { OllamaManager } from './ollama/OllamaManager';
 import { Logger } from './utils/Logger';
+import { Banner } from './utils/Banner';
 
 const program = new Command();
+
+// Mostrar banner principal
+Banner.show();
 
 // Configuração principal da CLI
 program
