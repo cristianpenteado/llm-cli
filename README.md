@@ -39,16 +39,15 @@ curl -fsSL https://raw.githubusercontent.com/seu-usuario/llm-cli/main/scripts/in
 
 ## 🎮 **Como Funciona**
 
-### 1. **Primeira Execução - Detecção de Hardware**
+### 1. **Primeira Execução - Configuração Inicial**
 ```bash
-# A CLI detecta automaticamente seu hardware
-llm detect-hardware
+# A CLI oferece modelos recomendados automaticamente
+llm init
 
-# Recomenda modelos compatíveis baseado em:
-# - Processador (CPU cores, arquitetura)
-# - Memória RAM disponível
-# - GPU (se disponível)
-# - Espaço em disco
+# Recomenda modelos baseados em:
+# - Tamanho e eficiência
+# - Especialização (código, geral, etc.)
+# - Compatibilidade com diferentes sistemas
 ```
 
 ### 2. **Inicialização de Projeto - Modelo Automático**
@@ -58,7 +57,7 @@ llm init
 
 # A CLI:
 # ✅ Detecta linguagem/framework automaticamente
-# 🤖 Sugere modelo baseado no hardware
+# 🤖 Sugere modelos recomendados
 # 📝 Cria estrutura de projeto com contexto
 # 🔧 Configura modelo padrão
 # 📁 Atualiza .gitignore automaticamente
@@ -85,7 +84,6 @@ llm chat
 ### **Inicialização e Configuração**
 ```bash
 llm init                    # Inicializa projeto com modelo automático
-llm detect-hardware         # Detecta hardware e recomenda modelos
 llm set-default-model       # Define modelo padrão global
 llm change-model           # Troca modelo do projeto atual
 ```
@@ -142,19 +140,22 @@ llm init                    # Configura projeto para toda equipe
 llm set-default-model       # Define modelo padrão da equipe
 ```
 
-## ⚡ **Modelos Recomendados por Hardware**
+## ⚡ **Modelos Recomendados**
 
-### **Hardware Básico (4GB RAM, CPU 2 cores)**
+### **Modelos Leves e Eficientes**
 - `phi3:mini` - 3.8B parâmetros, rápido e eficiente
 - `gemma2:2b` - 2B parâmetros, muito leve
+- `mistral:7b-instruct` - 7B parâmetros, equilibrado
 
-### **Hardware Médio (8GB RAM, CPU 4 cores)**
-- `deepseek-coder:6.7b-instruct` - Excelente para código
+### **Modelos Especializados em Código**
+- `deepseek-coder:6.7b-instruct` - Excelente para desenvolvimento
+- `codellama:7b-instruct` - Especializado em código da Meta
+- `codegemma:7b` - Foco em programação
+
+### **Modelos Gerais de Alta Qualidade**
+- `llama3.1:8b-instruct` - Qualidade superior, versátil
+- `qwen2.5:7b-instruct` - Boa performance geral
 - `phi3:3.8b-instruct` - Equilibrado entre velocidade e qualidade
-
-### **Hardware Avançado (16GB+ RAM, GPU)**
-- `llama3.1:8b-instruct` - Qualidade superior
-- `mistral:7b-instruct` - Muito versátil
 
 ## 🔒 **Segurança e Privacidade**
 

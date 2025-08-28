@@ -524,4 +524,40 @@ Este projeto foi configurado com a LLM CLI para desenvolvimento assistido por IA
       Logger.warn('Erro ao atualizar modelo do projeto:', error);
     }
   }
+
+  /**
+   * Pergunta ao usuário se ele quer carregar ou sobrescrever o projeto existente.
+   */
+  private async askUserAction(): Promise<{ action: 'load' | 'overwrite' | 'cancel' }> {
+    return new Promise((resolve) => {
+      const readline = require('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      Logger.info('🤔 O que você quer fazer?');
+      Logger.info('  1. Carregar projeto existente');
+      Logger.info('  2. Sobrescrever projeto existente');
+      Logger.info('  3. Cancelar inicialização');
+      Logger.newline();
+      
+      rl.question('Digite sua escolha (1, 2 ou 3): ', (answer: string) => {
+        rl.close();
+        
+        const choice = answer.trim();
+        
+        if (choice === '1') {
+          resolve({ action: 'load' });
+        } else if (choice === '2') {
+          resolve({ action: 'overwrite' });
+        } else if (choice === '3') {
+          resolve({ action: 'cancel' });
+        } else {
+          Logger.warn('⚠️ Escolha inválida. Cancelando...');
+          resolve({ action: 'cancel' });
+        }
+      });
+    });
+  }
 }

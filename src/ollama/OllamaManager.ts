@@ -250,7 +250,7 @@ export class OllamaManager {
   /**
    * Garante que o modelo está ativo
    */
-  private async ensureModelActive(modelName: string): Promise<void> {
+  async ensureModelActive(modelName: string): Promise<void> {
     try {
       const models = await this.listModels();
       const model = models.find(m => m.name === modelName);

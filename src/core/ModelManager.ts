@@ -61,43 +61,38 @@ export class ModelManager {
   }
 
   /**
-   * Garante que o modelo está pronto para uso
+   * Seleciona um modelo interativamente
    */
-  async ensureModelReady(modelName: string): Promise<void> {
-    Logger.info(`🔧 Verificando status do modelo: ${modelName}`);
-    
+  async selectModel(): Promise<string> {
     try {
-      // Verificar se o modelo já está ativo
-      if (this.activeModels.has(modelName)) {
-        const model = this.activeModels.get(modelName)!;
-        if (model.status === 'ready') {
-          Logger.info(`✅ Modelo ${modelName} já está ativo`);
-          return;
-        }
+      Logger.info('🤖 Selecionando modelo...');
+      
+      const availableModels = await this.listAvailableModels();
+      
+      if (availableModels.length === 0) {
+        throw new Error('Nenhum modelo disponível. Baixe um modelo primeiro com "ollama pull <nome>"');
       }
-
-      // Verificar se o modelo está disponível no Ollama
-      const availableModels = await this.ollamaManager.listModels();
-      const model = availableModels.find(m => m.name === modelName);
       
-      if (!model) {
-        throw new Error(`Modelo "${modelName}" não encontrado no Ollama`);
-      }
-
-              // Inicializar modelo se necessário
-        if (model.status !== 'ready') {
-          Logger.info(`🚀 Inicializando modelo: ${modelName}`);
-          await this.ollamaManager.startModel(modelName);
-          
-          // Aguardar modelo ficar pronto
-          await this.waitForModelReady(modelName);
-        }
-
-      // Atualizar status
-      this.activeModels.set(modelName, { ...model, status: 'ready' });
+      // Para simplificar, retorna o primeiro modelo disponível
+      // Em uma implementação completa, você pode usar uma biblioteca como inquirer
+      const selectedModel = availableModels[0].name;
+      Logger.info(`✅ Modelo selecionado: ${selectedModel}`);
       
-      Logger.success(`✅ Modelo ${modelName} está pronto para uso`);
+      return selectedModel;
       
+    } catch (error) {
+      Logger.error('Erro ao selecionar modelo:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verifica se um modelo está disponível e o torna pronto
+   */
+  async ensureModelReady(modelName: string): Promise<string> {
+    try {
+      await this.ollamaManager.ensureModelActive(modelName);
+      return modelName;
     } catch (error) {
       Logger.error('Erro ao preparar modelo:', error);
       throw error;

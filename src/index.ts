@@ -2,7 +2,6 @@
 
 import { Command } from 'commander';
 import { LLMCLI } from './core/LLMCLI';
-import { HardwareDetector } from './utils/HardwareDetector';
 import { ProjectManager } from './core/ProjectManager';
 import { ModelManager } from './core/ModelManager';
 import { ConversationManager } from './core/ConversationManager';
@@ -90,31 +89,6 @@ program
       await cli.startChat(options.model);
     } catch (error) {
       Logger.error('Erro ao iniciar chat:', error);
-      process.exit(1);
-    }
-  });
-
-// Comando para detectar hardware
-program
-  .command('detect-hardware')
-  .description('Detectar hardware do sistema e recomendar modelos')
-  .action(async () => {
-    try {
-      const detector = new HardwareDetector();
-      const hardware = await detector.detect();
-      const recommendations = await detector.getModelRecommendations(hardware);
-      
-      console.log('📊 Hardware detectado:');
-      console.log(`  CPU: ${hardware.cpu.model} (${hardware.cpu.cores} cores)`);
-      console.log(`  RAM: ${hardware.memory.total}GB`);
-      console.log(`  GPU: ${hardware.gpu ? hardware.gpu.model : 'Não detectada'}`);
-      
-      console.log('\n🚀 Modelos recomendados:');
-      recommendations.forEach((rec, index) => {
-        console.log(`  ${index + 1}. ${rec.name} - ${rec.description}`);
-      });
-    } catch (error) {
-      Logger.error('Erro ao detectar hardware:', error);
       process.exit(1);
     }
   });

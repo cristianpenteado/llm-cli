@@ -4,11 +4,9 @@ import { ConversationManager } from './ConversationManager';
 import { FileManager } from './FileManager';
 import { MCPClient } from '../mcp/MCPClient';
 import { OllamaManager } from '../ollama/OllamaManager';
-import { HardwareDetector } from '../utils/HardwareDetector';
 import { Logger } from '../utils/Logger';
 import { ConfigManager } from '../utils/ConfigManager';
-import { ModelSelector } from '../utils/ModelSelector';
-import { ProjectConfig, ModelConfig, HardwareInfo } from '../types';
+import { ProjectConfig, ModelConfig } from '../types';
 
 export class LLMCLI {
   private projectManager: ProjectManager;
@@ -17,21 +15,17 @@ export class LLMCLI {
   private fileManager: FileManager;
   private mcpClient: MCPClient;
   private ollamaManager: OllamaManager;
-  private hardwareDetector: HardwareDetector;
   private configManager: ConfigManager;
-  private modelSelector: ModelSelector;
   private currentProject: ProjectConfig | null = null;
 
   constructor() {
     this.configManager = new ConfigManager();
-    this.hardwareDetector = new HardwareDetector();
     this.ollamaManager = new OllamaManager();
     this.mcpClient = new MCPClient(this.ollamaManager);
     this.projectManager = new ProjectManager();
     this.modelManager = new ModelManager(this.ollamaManager, this.mcpClient);
     this.conversationManager = new ConversationManager(this.modelManager);
     this.fileManager = new FileManager();
-    this.modelSelector = new ModelSelector(this.ollamaManager);
   }
 
   /**
@@ -39,21 +33,6 @@ export class LLMCLI {
    */
   async initializeProject(options: { model?: string; force?: boolean }): Promise<void> {
     Logger.info('🚀 Inicializando novo projeto...');
-
-    // Detectar hardware se for primeira execução
-    const isFirstRun = await this.configManager.isFirstRun();
-    if (isFirstRun) {
-      Logger.info('🔍 Primeira execução detectada. Analisando hardware...');
-      const hardware = await this.hardwareDetector.detect();
-      await this.configManager.saveHardwareInfo(hardware);
-      
-      // Obter recomendações de modelo
-      const recommendations = await this.hardwareDetector.getModelRecommendations(hardware);
-      Logger.info('💡 Modelos recomendados para seu hardware:');
-      recommendations.forEach((rec, index) => {
-        Logger.info(`  ${index + 1}. ${rec.name} - ${rec.description}`);
-      });
-    }
 
     // Inicializar projeto
     const projectConfig = await this.projectManager.initializeProject(options);
@@ -66,15 +45,15 @@ export class LLMCLI {
       const defaultModel = await this.configManager.getDefaultModel();
       if (defaultModel) {
         // Verificar se o modelo padrão está disponível
-        selectedModel = await this.modelSelector.ensureModelAvailable(defaultModel);
+        selectedModel = await this.modelManager.ensureModelReady(defaultModel);
       } else {
         // Nenhum modelo padrão, usar seleção interativa
         Logger.info('🤖 Nenhum modelo padrão configurado. Vamos escolher um!');
-        selectedModel = await this.modelSelector.selectModel();
+        selectedModel = await this.modelManager.selectModel();
       }
     } else {
       // Verificar se o modelo especificado está disponível
-      selectedModel = await this.modelSelector.ensureModelAvailable(selectedModel);
+      selectedModel = await this.modelManager.ensureModelReady(selectedModel);
     }
 
     // Configurar modelo no projeto
@@ -85,7 +64,7 @@ export class LLMCLI {
     await this.projectManager.updateProjectModel(projectConfig.path, selectedModel);
 
     // Definir como modelo padrão se for primeira execução
-    if (isFirstRun) {
+    if (await this.configManager.isFirstRun()) {
       await this.configManager.setDefaultModel(selectedModel);
       Logger.info(`💾 Modelo ${selectedModel} definido como padrão global`);
     }
@@ -113,13 +92,13 @@ export class LLMCLI {
     if (!modelName) {
       // Usar seleção interativa
       Logger.info('🔄 Vamos escolher um novo modelo para o projeto!');
-      modelName = await this.modelSelector.selectModel();
+      modelName = await this.modelManager.selectModel();
     }
 
     Logger.info(`🔄 Trocando modelo para: ${modelName}`);
     
     // Verificar se o modelo está disponível e baixar se necessário
-    modelName = await this.modelSelector.ensureModelAvailable(modelName);
+    modelName = await this.modelManager.ensureModelReady(modelName);
 
     // Atualizar modelo do projeto
     await this.modelManager.setProjectModel(this.currentProject.path, modelName);
@@ -135,13 +114,13 @@ export class LLMCLI {
     if (!modelName) {
       // Usar seleção interativa
       Logger.info('⚙️ Vamos escolher um modelo padrão para todos os projetos!');
-      modelName = await this.modelSelector.selectModel();
+      modelName = await this.modelManager.selectModel();
     }
 
     Logger.info(`⚙️ Definindo modelo padrão: ${modelName}`);
     
     // Verificar disponibilidade do modelo e baixar se necessário
-    modelName = await this.modelSelector.ensureModelAvailable(modelName);
+    modelName = await this.modelManager.ensureModelReady(modelName);
 
     await this.configManager.setDefaultModel(modelName);
     Logger.success(`✅ Modelo padrão definido: ${modelName}`);
