@@ -23,7 +23,26 @@ export class ProjectManager {
     // Verificar se já existe um projeto
     const existingProject = await this.findExistingProject(currentPath);
     if (existingProject && !options.force) {
-      throw new Error(`Projeto já existe em ${currentPath}. Use --force para sobrescrever.`);
+      Logger.info(`📁 Projeto já inicializado em ${currentPath}`);
+      Logger.info(`📋 Detalhes do projeto existente:`);
+      Logger.info(`   Nome: ${existingProject.name}`);
+      Logger.info(`   Linguagem: ${existingProject.language}`);
+      Logger.info(`   Framework: ${existingProject.framework}`);
+      Logger.info(`   Modelo: ${existingProject.model || 'Não configurado'}`);
+      Logger.newline();
+      
+      const userAction = await this.askUserAction();
+      
+      if (userAction.action === 'load') {
+        Logger.info('📂 Carregando projeto existente...');
+        return existingProject;
+      } else if (userAction.action === 'overwrite') {
+        Logger.info('🔄 Sobrescrevendo projeto existente...');
+        // Continuar com a inicialização
+      } else {
+        Logger.info('❌ Inicialização cancelada pelo usuário');
+        throw new Error('Inicialização cancelada pelo usuário');
+      }
     }
 
     // Detectar linguagem e framework
