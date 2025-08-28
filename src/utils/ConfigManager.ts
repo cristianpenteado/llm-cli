@@ -42,14 +42,14 @@ export class ConfigManager {
       defaultModel: undefined,
       hardwareInfo: undefined,
       mcpConfig: {
-        serverUrl: 'http://localhost',
+        serverUrl: 'localhost',
         port: 8000,
         protocol: 'http',
         timeout: 30000
       },
       vlamaConfig: {
         modelsPath: path.join(os.homedir(), '.local', 'share', 'ollama', 'models'),
-        serverUrl: 'http://localhost',
+        serverUrl: 'localhost',
         port: 11434,
         maxMemory: 8192, // 8GB
         gpuEnabled: false
