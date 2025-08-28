@@ -1,4 +1,4 @@
-import { VlamaManager } from '../vlama/VlamaManager';
+import { OllamaManager } from '../ollama/OllamaManager';
 import { MCPClient } from '../mcp/MCPClient';
 import { ModelConfig, ModelResponse } from '../types';
 import { Logger } from '../utils/Logger';
@@ -7,14 +7,14 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 
 export class ModelManager {
-  private vlamaManager: VlamaManager;
+  private ollamaManager: OllamaManager;
   private mcpClient: MCPClient;
   private configManager: ConfigManager;
   private activeModels: Map<string, ModelConfig> = new Map();
   private projectModels: Map<string, string> = new Map();
 
-  constructor(vlamaManager: VlamaManager, mcpClient: MCPClient) {
-    this.vlamaManager = vlamaManager;
+  constructor(ollamaManager: OllamaManager, mcpClient: MCPClient) {
+    this.ollamaManager = ollamaManager;
     this.mcpClient = mcpClient;
     this.configManager = new ConfigManager();
   }
@@ -27,11 +27,11 @@ export class ModelManager {
     
     try {
       // Verificar se o modelo está disponível
-      const availableModels = await this.vlamaManager.listModels();
+      const availableModels = await this.ollamaManager.listModels();
       const modelExists = availableModels.some(m => m.name === modelName);
       
       if (!modelExists) {
-        throw new Error(`Modelo "${modelName}" não encontrado no Vlama`);
+        throw new Error(`Modelo "${modelName}" não encontrado no Ollama`);
       }
 
       // Salvar configuração do projeto
@@ -76,22 +76,22 @@ export class ModelManager {
         }
       }
 
-      // Verificar se o modelo está disponível no Vlama
-      const availableModels = await this.vlamaManager.listModels();
+      // Verificar se o modelo está disponível no Ollama
+      const availableModels = await this.ollamaManager.listModels();
       const model = availableModels.find(m => m.name === modelName);
       
       if (!model) {
-        throw new Error(`Modelo "${modelName}" não encontrado no Vlama`);
+        throw new Error(`Modelo "${modelName}" não encontrado no Ollama`);
       }
 
-      // Inicializar modelo se necessário
-      if (model.status !== 'ready') {
-        Logger.info(`🚀 Inicializando modelo: ${modelName}`);
-        await this.vlamaManager.startModel(modelName);
-        
-        // Aguardar modelo ficar pronto
-        await this.waitForModelReady(modelName);
-      }
+              // Inicializar modelo se necessário
+        if (model.status !== 'ready') {
+          Logger.info(`🚀 Inicializando modelo: ${modelName}`);
+          await this.ollamaManager.startModel(modelName);
+          
+          // Aguardar modelo ficar pronto
+          await this.waitForModelReady(modelName);
+        }
 
       // Atualizar status
       this.activeModels.set(modelName, { ...model, status: 'ready' });
@@ -112,7 +112,7 @@ export class ModelManager {
     
     while (Date.now() - startTime < timeout) {
       try {
-        const status = await this.vlamaManager.getModelStatus(modelName);
+        const status = await this.ollamaManager.getModelStatus(modelName);
         if (status === 'ready') {
           return;
         }
@@ -141,11 +141,29 @@ export class ModelManager {
       // Preparar contexto do projeto
       const projectContext = context ? await this.prepareProjectContext(context) : '';
       
-      // Enviar prompt via MCP
-      const response = await this.mcpClient.sendPrompt(modelName, prompt, projectContext);
-      
-      Logger.success(`✅ Resposta recebida do modelo ${modelName}`);
-      return response;
+      // Tentar usar MCP primeiro
+      try {
+        Logger.info('🔌 Tentando conectar via MCP...');
+        const response = await this.mcpClient.sendPrompt(modelName, prompt, projectContext);
+        Logger.success(`✅ Resposta recebida do modelo ${modelName} via MCP`);
+        return response;
+      } catch (mcpError) {
+        Logger.warn('⚠️ MCP falhou, usando Ollama diretamente...');
+        
+        // Fallback para Ollama direto
+        const ollamaResponse = await this.ollamaManager.generateResponse(modelName, prompt, projectContext);
+        
+        // Converter resposta do Ollama para formato ModelResponse
+        const response: ModelResponse = {
+          content: ollamaResponse.response,
+          changes: [],
+          suggestions: [],
+          confidence: 0.8
+        };
+        
+        Logger.success(`✅ Resposta recebida do modelo ${modelName} via Ollama`);
+        return response;
+      }
       
     } catch (error) {
       Logger.error('Erro ao enviar prompt para o modelo:', error);
@@ -189,7 +207,7 @@ export class ModelManager {
    */
   async listAvailableModels(): Promise<ModelConfig[]> {
     try {
-      const models = await this.vlamaManager.listModels();
+      const models = await this.ollamaManager.listModels();
       return models.map(model => ({
         name: model.name,
         description: model.description || 'Sem descrição',
@@ -211,7 +229,7 @@ export class ModelManager {
    */
   async getModelInfo(modelName: string): Promise<ModelConfig | null> {
     try {
-      const models = await this.vlamaManager.listModels();
+      const models = await this.ollamaManager.listModels();
       const model = models.find(m => m.name === modelName);
       
       if (!model) {
@@ -242,7 +260,7 @@ export class ModelManager {
     Logger.info(`🛑 Parando modelo: ${modelName}`);
     
     try {
-      await this.vlamaManager.stopModel(modelName);
+      await this.ollamaManager.stopModel(modelName);
       this.activeModels.delete(modelName);
       
       Logger.success(`✅ Modelo ${modelName} parado`);

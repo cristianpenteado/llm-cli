@@ -156,11 +156,11 @@ export class Logger {
   }
 
   /**
-   * Log de Vlama
+   * Log de Ollama
    */
-  static vlama(message: string, ...args: any[]): void {
+  static ollama(message: string, ...args: any[]): void {
     if (this.currentLevel <= LogLevel.INFO) {
-      const formattedMessage = this.formatMessage('VLAMA', message, chalk.blue.bold);
+      const formattedMessage = this.formatMessage('OLLAMA', message, chalk.blue.bold);
       console.log(formattedMessage, ...args);
     }
   }
@@ -169,13 +169,12 @@ export class Logger {
    * Formata mensagem de log
    */
   private static formatMessage(level: string, message: string, colorFn: (text: string) => string): string {
-    const timestamp = new Date().toISOString();
     const levelStr = `[${level}]`;
     
     if (this.isColored) {
-      return `${chalk.gray(timestamp)} ${colorFn(levelStr)} ${message}`;
+      return `${colorFn(levelStr)} ${message}`;
     } else {
-      return `${timestamp} ${levelStr} ${message}`;
+      return `${levelStr} ${message}`;
     }
   }
 

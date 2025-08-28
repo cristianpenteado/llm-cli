@@ -59,26 +59,26 @@ describe('LLMCLI', () => {
   describe('setDefaultModel', () => {
     it('should set default model', async () => {
       // Mock das dependências necessárias
-      const mockVlamaManager = {
+      const mockOllamaManager = {
         listModels: jest.fn().mockResolvedValue([
           { name: 'test-model', description: 'Test Model' }
         ])
       };
 
-      // Substituir o vlamaManager mockado
-      (cli as any).vlamaManager = mockVlamaManager;
+      // Substituir o ollamaManager mockado
+      (cli as any).ollamaManager = mockOllamaManager;
 
       await expect(cli.setDefaultModel('test-model')).resolves.not.toThrow();
     });
 
     it('should throw error for non-existent model', async () => {
-      const mockVlamaManager = {
+      const mockOllamaManager = {
         listModels: jest.fn().mockResolvedValue([
           { name: 'other-model', description: 'Other Model' }
         ])
       };
 
-      (cli as any).vlamaManager = mockVlamaManager;
+      (cli as any).ollamaManager = mockOllamaManager;
 
       await expect(cli.setDefaultModel('non-existent-model')).rejects.toThrow();
     });
@@ -86,7 +86,7 @@ describe('LLMCLI', () => {
 
   describe('listModels', () => {
     it('should list available models', async () => {
-      const mockVlamaManager = {
+      const mockOllamaManager = {
         listModels: jest.fn().mockResolvedValue([
           { name: 'model1', description: 'Model 1', size: '1GB', compatibility: 'Linux' },
           { name: 'model2', description: 'Model 2', size: '2GB', compatibility: 'Linux' }
@@ -97,7 +97,7 @@ describe('LLMCLI', () => {
         getDefaultModel: jest.fn().mockReturnValue('model1')
       };
 
-      (cli as any).vlamaManager = mockVlamaManager;
+      (cli as any).ollamaManager = mockOllamaManager;
       (cli as any).configManager = mockConfigManager;
 
       await expect(cli.listModels()).resolves.not.toThrow();

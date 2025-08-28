@@ -8,7 +8,7 @@ import { ModelManager } from './core/ModelManager';
 import { ConversationManager } from './core/ConversationManager';
 import { FileManager } from './core/FileManager';
 import { MCPClient } from './mcp/MCPClient';
-import { VlamaManager } from './vlama/VlamaManager';
+import { OllamaManager } from './ollama/OllamaManager';
 import { Logger } from './utils/Logger';
 
 const program = new Command();
@@ -39,7 +39,7 @@ program
 program
   .command('change-model')
   .description('Trocar o modelo LLM para o projeto atual')
-  .option('-m, --model <model>', 'Nome do novo modelo')
+  .option('-m, --model <model>', 'Nome do novo modelo (opcional - usa seleção interativa)')
   .action(async (options) => {
     try {
       const cli = new LLMCLI();
@@ -54,7 +54,7 @@ program
 program
   .command('set-default-model')
   .description('Definir modelo base padrão para todos os projetos')
-  .argument('<model>', 'Nome do modelo padrão')
+  .argument('[model]', 'Nome do modelo padrão (opcional - usa seleção interativa)')
   .action(async (model) => {
     try {
       const cli = new LLMCLI();

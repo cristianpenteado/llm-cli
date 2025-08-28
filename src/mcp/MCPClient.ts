@@ -3,16 +3,23 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { MCPConfig, ModelResponse } from '../types';
 import { Logger } from '../utils/Logger';
 import { ConfigManager } from '../utils/ConfigManager';
+import { MCPServer } from './MCPServer';
+import { OllamaManager } from '../ollama/OllamaManager';
 
 export class MCPClient {
   private client: Client;
   private config: MCPConfig;
   private configManager: ConfigManager;
+  private mcpServer: MCPServer;
+  private ollamaManager: OllamaManager;
   private isConnected: boolean = false;
 
-  constructor() {
+  constructor(ollamaManager: OllamaManager) {
     this.configManager = new ConfigManager();
     this.config = this.configManager.getMCPConfig();
+    this.ollamaManager = ollamaManager;
+    this.mcpServer = new MCPServer(ollamaManager);
+    
     this.client = new Client({
       name: 'llm-cli',
       version: '1.0.0'
@@ -20,26 +27,25 @@ export class MCPClient {
   }
 
   /**
-   * Conecta ao servidor MCP
+   * Conecta ao servidor MCP integrado
    */
   async connect(): Promise<void> {
     try {
-      Logger.mcp('🔌 Conectando ao servidor MCP...');
+      Logger.mcp('🔌 Iniciando servidor MCP integrado...');
       
-      // Conectar via stdio para comunicação com servidor MCP local
-      const transport = new StdioClientTransport({
-        command: 'mcp-server',
-        args: []
-      });
-      await this.client.connect(transport);
+      // Iniciar servidor MCP integrado
+      await this.mcpServer.start();
       
+      // Aguardar um pouco para o servidor estar pronto
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      Logger.success('✅ Servidor MCP integrado iniciado');
       this.isConnected = true;
-      Logger.success('✅ Conectado ao servidor MCP via stdio');
       
     } catch (error) {
-      Logger.error('Erro ao conectar ao servidor MCP:', error);
+      Logger.error('Erro ao iniciar servidor MCP integrado:', error);
       this.isConnected = false;
-      throw new Error('Falha ao conectar ao servidor MCP');
+      throw new Error('Falha ao iniciar servidor MCP integrado');
     }
   }
 
@@ -49,14 +55,15 @@ export class MCPClient {
   async disconnect(): Promise<void> {
     if (this.isConnected) {
       try {
-        Logger.mcp('🔌 Desconectando do servidor MCP...');
+        Logger.mcp('🔌 Parando servidor MCP integrado...');
         
-        await this.client.close();
+        await this.mcpServer.stop();
         this.isConnected = false;
-        Logger.success('✅ Desconectado do servidor MCP');
+        
+        Logger.success('✅ Servidor MCP integrado parado');
         
       } catch (error) {
-        Logger.warn('Erro ao desconectar do servidor MCP:', error);
+        Logger.warn('Erro ao parar servidor MCP integrado:', error);
       }
     }
   }
@@ -65,7 +72,7 @@ export class MCPClient {
    * Verifica se está conectado
    */
   isConnectedToServer(): boolean {
-    return this.isConnected;
+    return this.isConnected && this.mcpServer.isServerRunning();
   }
 
   /**

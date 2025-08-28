@@ -147,8 +147,8 @@ export interface MCPConfig {
   timeout: number;
 }
 
-// Configuração Vlama
-export interface VlamaConfig {
+// Configuração Ollama
+export interface OllamaConfig {
   modelsPath: string;
   serverUrl: string;
   port: number;
@@ -161,7 +161,7 @@ export interface GlobalConfig {
   defaultModel?: string;
   hardwareInfo?: HardwareInfo;
   mcpConfig: MCPConfig;
-  vlamaConfig: VlamaConfig;
+  ollamaConfig: OllamaConfig;
   projects: Record<string, ProjectConfig>;
   theme: 'light' | 'dark' | 'auto';
   language: 'pt-BR' | 'en-US';

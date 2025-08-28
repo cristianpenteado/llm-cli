@@ -1,379 +1,193 @@
-# LLM CLI
+# 🚀 LLM CLI - Agente de IA para Modelos Locais
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-blue.svg)](https://www.typescriptlang.org/)
+> **CLI inteligente que funciona como um agente de IA no terminal, integrado com modelos LLMs locais via Ollama**
 
-Uma CLI inteligente e conversacional para desenvolvimento assistido por IA, distribuída via NPM e otimizada para Linux. A LLM CLI utiliza o Model Context Protocol (MCP) com JSON-RPC para se comunicar com modelos LLMs locais via Vlama, oferecendo uma experiência de desenvolvimento fluida e inteligente.
+## 🎯 **Proposta da CLI**
 
-## 🚀 Características Principais
+A **LLM CLI** é uma ferramenta de linha de comando que transforma seu terminal em um assistente de IA inteligente. Diferente de outras CLIs que dependem de APIs externas, ela funciona **100% localmente** usando modelos LLMs rodando na sua máquina via Ollama.
 
-### 🤖 **Detecção Inteligente de Hardware**
-- **Análise Automática**: Detecta CPU, RAM, GPU e armazenamento do sistema
-- **Recomendações Personalizadas**: Sugere modelos LLMs compatíveis com seu hardware
-- **Otimização de Performance**: Configura modelos baseados nas capacidades do sistema
+### 🌟 **Principais Características**
 
-### 🏗️ **Orquestração de Modelos LLMs**
-- **Gerenciamento Automático**: Inicializa e para modelos automaticamente por projeto
-- **Integração Vlama**: Suporte nativo para modelos locais via Vlama
-- **MCP Protocol**: Comunicação padronizada via Model Context Protocol
+- **🤖 Agente de IA Local**: Funciona offline com modelos rodando na sua máquina
+- **🚀 Inicialização Inteligente**: Detecta automaticamente o tipo de projeto e sugere modelos compatíveis
+- **💬 Interface Conversacional**: Chat natural com comandos especiais para desenvolvimento
+- **📁 Gerenciamento de Projetos**: Contexto inteligente e histórico de alterações
+- **🔄 Fallback Automático**: Se o MCP falhar, usa Ollama diretamente
+- **📝 Integração com Git**: Atualiza automaticamente `.gitignore` para incluir `.llm-cli`
 
-### 📁 **Inicialização Inteligente de Projetos**
-- **Detecção Automática**: Identifica linguagem e framework automaticamente
-- **Configuração Contextual**: Armazena contexto do projeto em Markdown
-- **Modelo por Projeto**: Configuração específica de modelo para cada projeto
-
-### 🔧 **Manipulação Inteligente de Arquivos**
-- **Edição Contextual**: Modifica arquivos preservando contexto existente
-- **Sistema de Backups**: Cria backups automáticos antes de alterações
-- **Histórico de Mudanças**: Rastreia todas as alterações com rollback
-
-### 💬 **Interface Conversacional Natural**
-- **Comandos Intuitivos**: Interação em linguagem natural
-- **Comandos Especiais**: Sistema de comandos `/` para funcionalidades avançadas
-- **Contexto Persistente**: Mantém contexto entre sessões
-
-### 🔄 **Funcionalidades de Desenvolvimento**
-- **Criação de Funcionalidades**: Gera testes, módulos e componentes automaticamente
-- **Edição Inteligente**: Modifica código baseado em instruções em linguagem natural
-- **Rollback Seguro**: Desfaz alterações com sistema de backup integrado
-
-## 🛠️ Instalação
+## 🚀 **Instalação Rápida**
 
 ### Pré-requisitos
-- **Node.js**: Versão 18 ou superior
-- **Linux**: Sistema operacional Linux (Ubuntu, Debian, CentOS, etc.)
-- **Vlama**: Gerenciador de modelos LLMs locais
+- **Node.js** 18+ e **npm**
+- **Ollama** instalado e rodando
+- **Linux** (Ubuntu/Debian recomendado)
 
 ### Instalação Global
 ```bash
+# Instalar via NPM
 npm install -g llm-cli
-```
 
-### Verificação da Instalação
-```bash
+# Verificar instalação
 llm --version
 ```
 
-## 🎯 Primeiros Passos
-
-### 1. **Detectar Hardware e Configurar**
+### Script de Instalação Automática
 ```bash
-# Detectar hardware e obter recomendações de modelos
+# Baixar e executar script de instalação
+curl -fsSL https://raw.githubusercontent.com/seu-usuario/llm-cli/main/scripts/install.sh | bash
+```
+
+## 🎮 **Como Funciona**
+
+### 1. **Primeira Execução - Detecção de Hardware**
+```bash
+# A CLI detecta automaticamente seu hardware
 llm detect-hardware
 
-# Definir modelo padrão baseado nas recomendações
-llm set-default-model phi-3:3.8b-instruct
+# Recomenda modelos compatíveis baseado em:
+# - Processador (CPU cores, arquitetura)
+# - Memória RAM disponível
+# - GPU (se disponível)
+# - Espaço em disco
 ```
 
-### 2. **Inicializar Projeto**
+### 2. **Inicialização de Projeto - Modelo Automático**
 ```bash
-# Navegar para a pasta do projeto
-cd meu-projeto
-
-# Inicializar projeto (detecta linguagem automaticamente)
+# Em qualquer pasta de projeto
 llm init
 
-# Ou especificar modelo específico
-llm init -m deepseek-coder:6.7b-instruct
+# A CLI:
+# ✅ Detecta linguagem/framework automaticamente
+# 🤖 Sugere modelo baseado no hardware
+# 📝 Cria estrutura de projeto com contexto
+# 🔧 Configura modelo padrão
+# 📁 Atualiza .gitignore automaticamente
 ```
 
-### 3. **Modo Conversacional**
+### 3. **Chat Inteligente com Fallback**
 ```bash
-# Iniciar chat com IA
+# Iniciar conversa
 llm chat
 
-# Ou especificar modelo para esta sessão
-llm chat -m phi-3:3.8b-instruct
+# Se o projeto não estiver inicializado:
+# ⚠️ "Projeto não inicializado! Deseja inicializar agora? (S/n)"
+# 🚀 Inicializa automaticamente se confirmado
+# 💬 Inicia chat com modelo configurado
+
+# Fallback automático:
+# 🔌 Tenta conectar via MCP integrado
+# ⚠️ Se falhar, usa Ollama diretamente
+# ✅ Chat funciona independente do protocolo
 ```
 
-## 📚 Comandos Principais
+## 🛠️ **Comandos Principais**
 
-### **Gerenciamento de Projetos**
+### **Inicialização e Configuração**
 ```bash
-# Inicializar novo projeto
-llm init [-m modelo] [-f]
+llm init                    # Inicializa projeto com modelo automático
+llm detect-hardware         # Detecta hardware e recomenda modelos
+llm set-default-model       # Define modelo padrão global
+llm change-model           # Troca modelo do projeto atual
+```
 
-# Ver status do projeto atual
-llm status
-
-# Trocar modelo do projeto
-llm change-model -m novo-modelo
+### **Desenvolvimento Assistido**
+```bash
+llm chat                   # Chat conversacional com IA
+llm create <tipo> <nome>   # Cria funcionalidades via IA
+llm edit <arquivo> <inst>  # Edita arquivos com instruções
+llm status                 # Status do projeto e modelo
 ```
 
 ### **Gerenciamento de Modelos**
 ```bash
-# Listar modelos disponíveis
-llm list-models
-
-# Definir modelo padrão global
-llm set-default-model nome-do-modelo
-
-# Detectar hardware e recomendações
-llm detect-hardware
+llm list-models            # Lista modelos disponíveis
+llm download <modelo>      # Baixa modelo via Ollama
+llm remove <modelo>        # Remove modelo local
 ```
 
-### **Desenvolvimento**
+## 🔧 **Arquitetura Inteligente**
+
+### **Sistema de Fallback**
+```
+Usuário → LLM CLI → MCP Integrado → Ollama
+                ↓ (se falhar)
+            Ollama Direto → Modelo Local
+```
+
+### **Módulos Principais**
+- **🤖 ModelManager**: Orquestra modelos com fallback automático
+- **📁 ProjectManager**: Gerenciamento inteligente de projetos
+- **💬 ConversationManager**: Interface conversacional natural
+- **🔌 MCPClient**: Cliente MCP com servidor integrado
+- **📝 FileManager**: Operações de arquivo com histórico
+
+## 🎯 **Casos de Uso**
+
+### **Desenvolvedor Iniciando Novo Projeto**
 ```bash
-# Criar nova funcionalidade
-llm create <tipo> <nome> [-d descrição]
-
-# Editar arquivo existente
-llm edit <arquivo> <instrução>
-
-# Desfazer alterações
-llm rollback [-n número]
+cd meu-projeto-nodejs
+llm init                    # Detecta Node.js, sugere modelo leve
+llm chat                    # "Crie um servidor Express básico"
 ```
 
-### **Modo Conversacional**
+### **Desenvolvedor em Projeto Existente**
 ```bash
-# Iniciar chat
-llm chat [-m modelo]
-
-# Comandos disponíveis no chat:
-/help              # Mostra ajuda
-/change-model      # Troca modelo ativo
-/status            # Status da sessão
-/clear             # Limpa histórico
-/save [nome]       # Salva conversa
-/load <nome>       # Carrega conversa
-/context           # Mostra contexto do projeto
-/exit              # Sai do chat
+cd projeto-python
+llm chat                    # "Adicione validação de dados na função X"
 ```
 
-## 🔧 Configuração
-
-### **Arquivo de Configuração Global**
+### **Equipe de Desenvolvimento**
 ```bash
-# Localização: ~/.llm-cli/config.json
-{
-  "defaultModel": "phi-3:3.8b-instruct",
-  "mcpConfig": {
-    "serverUrl": "http://localhost",
-    "port": 8000,
-    "protocol": "http",
-    "timeout": 30000
-  },
-  "vlamaConfig": {
-    "modelsPath": "~/.local/share/ollama/models",
-    "serverUrl": "http://localhost",
-    "port": 11434,
-    "maxMemory": 8192,
-    "gpuEnabled": false
-  }
-}
+llm init                    # Configura projeto para toda equipe
+llm set-default-model       # Define modelo padrão da equipe
 ```
 
-### **Configuração por Projeto**
-```bash
-# Localização: .llm-cli/project.json
-{
-  "path": "/caminho/do/projeto",
-  "name": "meu-projeto",
-  "language": "TypeScript",
-  "framework": "React",
-  "model": "deepseek-coder:6.7b-instruct",
-  "createdAt": "2024-01-01T00:00:00.000Z"
-}
-```
+## ⚡ **Modelos Recomendados por Hardware**
 
-## 🎨 Exemplos de Uso
+### **Hardware Básico (4GB RAM, CPU 2 cores)**
+- `phi3:mini` - 3.8B parâmetros, rápido e eficiente
+- `gemma2:2b` - 2B parâmetros, muito leve
 
-### **Criar Testes Automáticos**
-```bash
-# No modo conversacional
-llm chat
+### **Hardware Médio (8GB RAM, CPU 4 cores)**
+- `deepseek-coder:6.7b-instruct` - Excelente para código
+- `phi3:3.8b-instruct` - Equilibrado entre velocidade e qualidade
 
-# Solicitar criação de testes
-> Crie testes unitários para o componente UserProfile
+### **Hardware Avançado (16GB+ RAM, GPU)**
+- `llama3.1:8b-instruct` - Qualidade superior
+- `mistral:7b-instruct` - Muito versátil
 
-# A CLI irá:
-# 1. Analisar o código existente
-# 2. Gerar testes apropriados
-# 3. Pedir confirmação antes de aplicar
-# 4. Criar backups automáticos
-```
+## 🔒 **Segurança e Privacidade**
 
-### **Refatorar Código**
-```bash
-# Editar arquivo com instrução específica
-llm edit src/components/UserProfile.tsx "Converta para hooks funcionais e adicione TypeScript strict"
+- **100% Local**: Nenhum dado sai da sua máquina
+- **Sem APIs Externas**: Funciona offline
+- **Controle Total**: Você escolhe os modelos e configurações
+- **Histórico Local**: Conversas ficam na sua máquina
 
-# A CLI irá:
-# 1. Ler o arquivo atual
-# 2. Gerar código refatorado
-# 3. Aplicar mudanças com backup
-# 4. Registrar no histórico
-```
+## 🚀 **Próximos Passos**
 
-### **Criar Nova Funcionalidade**
-```bash
-# Criar módulo de autenticação
-llm create module auth -d "Sistema de autenticação com JWT e refresh tokens"
+1. **Instale a CLI**: `npm install -g llm-cli`
+2. **Configure Ollama**: `ollama pull phi3:mini`
+3. **Inicialize Projeto**: `llm init`
+4. **Comece a Conversar**: `llm chat`
 
-# A CLI irá:
-# 1. Analisar estrutura do projeto
-# 2. Gerar arquivos necessários
-# 3. Configurar dependências
-# 4. Criar documentação
-```
+## 🤝 **Contribuindo**
 
-## 🏗️ Arquitetura
+Contribuições são bem-vindas! A CLI é open-source e aceita:
+- 🐛 Reportes de bugs
+- 💡 Sugestões de funcionalidades
+- 🔧 Pull requests
+- 📚 Melhorias na documentação
 
-### **Componentes Principais**
-- **LLMCLI**: Orquestrador principal da aplicação
-- **ProjectManager**: Gerenciamento de projetos e detecção de linguagens
-- **ModelManager**: Orquestração de modelos LLMs
-- **ConversationManager**: Interface conversacional e comandos
-- **FileManager**: Manipulação de arquivos e sistema de backup
-- **MCPClient**: Cliente para comunicação MCP
-- **VlamaManager**: Gerenciamento de modelos locais
+## 📄 **Licença**
 
-### **Fluxo de Trabalho**
-```
-Usuário → CLI → ModelManager → MCPClient → Modelo LLM
-                ↓
-            FileManager → Aplicar Mudanças
-                ↓
-            ProjectManager → Atualizar Contexto
-```
+MIT License - Veja [LICENSE](LICENSE) para detalhes.
 
-## 🔒 Segurança e Backup
+## 🙏 **Agradecimentos**
 
-### **Sistema de Backups**
-- **Backups Automáticos**: Criados antes de cada alteração
-- **Histórico de Mudanças**: Rastreamento completo de alterações
-- **Rollback Seguro**: Desfaz alterações com segurança
-
-### **Isolamento de Projetos**
-- **Configuração por Projeto**: Cada projeto tem suas configurações
-- **Contexto Isolado**: Contexto específico para cada projeto
-- **Modelos Independentes**: Configuração de modelo por projeto
-
-## 🧪 Testes
-
-### **Executar Testes**
-```bash
-# Instalar dependências
-npm install
-
-# Executar testes
-npm test
-
-# Testes em modo watch
-npm run test:watch
-
-# Cobertura de código
-npm run test -- --coverage
-```
-
-### **Estrutura de Testes**
-```
-src/__tests__/
-├── setup.ts              # Configuração global
-├── LLMCLI.test.ts        # Testes da classe principal
-├── core/                 # Testes dos componentes principais
-├── utils/                # Testes das utilidades
-├── mcp/                  # Testes do cliente MCP
-└── vlama/                # Testes do gerenciador Vlama
-```
-
-## 🚀 Desenvolvimento
-
-### **Estrutura do Projeto**
-```
-src/
-├── core/                 # Componentes principais
-│   ├── LLMCLI.ts        # Classe principal
-│   ├── ProjectManager.ts # Gerenciador de projetos
-│   ├── ModelManager.ts   # Gerenciador de modelos
-│   ├── ConversationManager.ts # Gerenciador de conversas
-│   └── FileManager.ts    # Gerenciador de arquivos
-├── mcp/                  # Cliente MCP
-│   └── MCPClient.ts      # Implementação MCP
-├── vlama/                # Gerenciador Vlama
-│   └── VlamaManager.ts   # Integração Vlama
-├── utils/                # Utilitários
-│   ├── Logger.ts         # Sistema de logging
-│   ├── ConfigManager.ts  # Gerenciador de configuração
-│   ├── HardwareDetector.ts # Detector de hardware
-│   └── LanguageDetector.ts # Detector de linguagens
-├── types/                # Definições de tipos
-│   └── index.ts          # Tipos principais
-└── index.ts              # Ponto de entrada
-```
-
-### **Scripts Disponíveis**
-```bash
-# Desenvolvimento
-npm run dev              # Executar em modo desenvolvimento
-npm run build            # Compilar TypeScript
-npm run start            # Executar versão compilada
-
-# Qualidade de Código
-npm run lint             # Verificar código
-npm run lint:fix         # Corrigir problemas automaticamente
-
-# Testes
-npm run test             # Executar testes
-npm run test:watch       # Testes em modo watch
-npm run test:coverage    # Cobertura de testes
-
-# Build e Deploy
-npm run clean            # Limpar build
-npm run prepublishOnly   # Build antes de publicar
-```
-
-## 🤝 Contribuindo
-
-### **Como Contribuir**
-1. **Fork** o repositório
-2. **Clone** seu fork localmente
-3. **Crie** uma branch para sua feature
-4. **Desenvolva** e **teste** suas mudanças
-5. **Commit** com mensagens descritivas
-6. **Push** para sua branch
-7. **Abra** um Pull Request
-
-### **Padrões de Código**
-- **TypeScript**: Código tipado e estruturado
-- **ESLint**: Linting automático
-- **Prettier**: Formatação de código
-- **Jest**: Testes unitários
-- **Conventional Commits**: Padrão de commits
-
-### **Checklist de Pull Request**
-- [ ] Código compila sem erros
-- [ ] Testes passam
-- [ ] Cobertura de testes mantida
-- [ ] Documentação atualizada
-- [ ] Linting passa
-- [ ] Commits seguem padrão
-
-## 📄 Licença
-
-Este projeto está licenciado sob a **MIT License** - veja o arquivo [LICENSE](LICENSE) para detalhes.
-
-## 🙏 Agradecimentos
-
-- **Vlama**: Gerenciamento de modelos LLMs locais
-- **MCP**: Model Context Protocol para comunicação padronizada
-- **Comunidade Open Source**: Contribuições e feedback
-
-## 📞 Suporte
-
-### **Canais de Suporte**
-- **Issues**: [GitHub Issues](https://github.com/llm-cli/llm-cli/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/llm-cli/llm-cli/discussions)
-- **Documentação**: [Wiki do Projeto](https://github.com/llm-cli/llm-cli/wiki)
-
-### **Problemas Comuns**
-- **Modelo não encontrado**: Verifique se o Vlama está rodando
-- **Erro de conexão MCP**: Verifique configuração do servidor MCP
-- **Hardware não detectado**: Execute `llm detect-hardware` para diagnóstico
+- **Ollama** pela infraestrutura de modelos locais
+- **Model Context Protocol** pelo padrão de comunicação
+- **Comunidade open-source** por inspiração e suporte
 
 ---
 
-**LLM CLI** - Transformando desenvolvimento com IA conversacional 🚀
-
-*Desenvolvido com ❤️ pela comunidade open source*
+**🎉 Transforme seu terminal em um assistente de IA inteligente e local!**

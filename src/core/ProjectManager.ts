@@ -55,6 +55,9 @@ export class ProjectManager {
     // Criar arquivo README se não existir
     await this.createProjectREADME(projectConfig);
     
+    // Atualizar .gitignore para incluir .llm-cli
+    await this.updateGitignore(currentPath);
+    
     return projectConfig;
   }
 
@@ -79,6 +82,25 @@ export class ProjectManager {
     }
     
     return null;
+  }
+
+  /**
+   * Verifica se um projeto está inicializado
+   */
+  async isProjectInitialized(projectPath: string): Promise<boolean> {
+    const configPath = path.join(projectPath, '.llm-cli', 'project.json');
+    return await fs.pathExists(configPath);
+  }
+
+  /**
+   * Carrega um projeto existente
+   */
+  async loadProject(projectPath: string): Promise<ProjectConfig> {
+    const project = await this.findExistingProject(projectPath);
+    if (!project) {
+      throw new Error(`Projeto não encontrado em ${projectPath}. Execute "llm init" primeiro.`);
+    }
+    return project;
   }
 
   /**
@@ -459,6 +481,47 @@ Este projeto foi configurado com a LLM CLI para desenvolvimento assistido por IA
         return 'go run .';
       default:
         return 'echo "Execução não configurada para esta linguagem"';
+    }
+  }
+
+  /**
+   * Atualiza .gitignore para incluir .llm-cli
+   */
+  private async updateGitignore(projectPath: string): Promise<void> {
+    const gitignorePath = path.join(projectPath, '.gitignore');
+    const gitignoreContent = `# LLM CLI
+.llm-cli/
+`;
+
+    if (await fs.pathExists(gitignorePath)) {
+      const existingContent = await fs.readFile(gitignorePath, 'utf-8');
+      if (!existingContent.includes('.llm-cli/')) {
+        await fs.appendFile(gitignorePath, gitignoreContent);
+        Logger.info('📝 Atualizado .gitignore para incluir .llm-cli');
+      }
+    } else {
+      await fs.writeFile(gitignorePath, gitignoreContent);
+      Logger.info('📝 Criado .gitignore com .llm-cli');
+    }
+  }
+
+  /**
+   * Atualiza a configuração do projeto com o modelo selecionado
+   */
+  async updateProjectModel(projectPath: string, modelName: string): Promise<void> {
+    try {
+      const configPath = path.join(projectPath, '.llm-cli', 'project.json');
+      
+      if (await fs.pathExists(configPath)) {
+        const configData = await fs.readJson(configPath);
+        configData.model = modelName;
+        configData.updatedAt = new Date();
+        
+        await fs.writeJson(configPath, configData, { spaces: 2 });
+        Logger.info(`💾 Modelo ${modelName} salvo na configuração do projeto`);
+      }
+    } catch (error) {
+      Logger.warn('Erro ao atualizar modelo do projeto:', error);
     }
   }
 }

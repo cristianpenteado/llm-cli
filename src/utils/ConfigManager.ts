@@ -1,7 +1,7 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
-import { GlobalConfig, HardwareInfo } from '../types';
+import { GlobalConfig, HardwareInfo, OllamaConfig } from '../types';
 import { Logger } from './Logger';
 
 export class ConfigManager {
@@ -47,7 +47,7 @@ export class ConfigManager {
         protocol: 'http',
         timeout: 30000
       },
-      vlamaConfig: {
+      ollamaConfig: {
         modelsPath: path.join(os.homedir(), '.local', 'share', 'ollama', 'models'),
         serverUrl: 'localhost',
         port: 11434,
@@ -128,19 +128,19 @@ export class ConfigManager {
   }
 
   /**
-   * Salva configuração Vlama
+   * Salva configuração Ollama
    */
-  async setVlamaConfig(vlamaConfig: any): Promise<void> {
-    this.config.vlamaConfig = { ...this.config.vlamaConfig, ...vlamaConfig };
+  async setOllamaConfig(ollamaConfig: any): Promise<void> {
+    this.config.ollamaConfig = { ...this.config.ollamaConfig, ...ollamaConfig };
     await this.saveConfig();
-    Logger.info('💾 Configuração Vlama atualizada');
+    Logger.info('💾 Configuração Ollama atualizada');
   }
 
   /**
-   * Obtém configuração Vlama
+   * Obtém configuração Ollama
    */
-  getVlamaConfig(): any {
-    return this.config.vlamaConfig;
+  getOllamaConfig(): any {
+    return this.config.ollamaConfig;
   }
 
   /**
@@ -266,7 +266,7 @@ export class ConfigManager {
     }
 
     // Verificar se tem propriedades obrigatórias
-    const requiredProps = ['mcpConfig', 'vlamaConfig', 'projects', 'theme', 'language'];
+    const requiredProps = ['mcpConfig', 'ollamaConfig', 'projects', 'theme', 'language'];
     for (const prop of requiredProps) {
       if (!(prop in config)) {
         return false;

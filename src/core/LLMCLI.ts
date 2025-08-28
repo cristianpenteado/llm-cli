@@ -3,10 +3,11 @@ import { ModelManager } from './ModelManager';
 import { ConversationManager } from './ConversationManager';
 import { FileManager } from './FileManager';
 import { MCPClient } from '../mcp/MCPClient';
-import { VlamaManager } from '../vlama/VlamaManager';
+import { OllamaManager } from '../ollama/OllamaManager';
 import { HardwareDetector } from '../utils/HardwareDetector';
 import { Logger } from '../utils/Logger';
 import { ConfigManager } from '../utils/ConfigManager';
+import { ModelSelector } from '../utils/ModelSelector';
 import { ProjectConfig, ModelConfig, HardwareInfo } from '../types';
 
 export class LLMCLI {
@@ -15,20 +16,22 @@ export class LLMCLI {
   private conversationManager: ConversationManager;
   private fileManager: FileManager;
   private mcpClient: MCPClient;
-  private vlamaManager: VlamaManager;
+  private ollamaManager: OllamaManager;
   private hardwareDetector: HardwareDetector;
   private configManager: ConfigManager;
+  private modelSelector: ModelSelector;
   private currentProject: ProjectConfig | null = null;
 
   constructor() {
     this.configManager = new ConfigManager();
     this.hardwareDetector = new HardwareDetector();
-    this.vlamaManager = new VlamaManager();
-    this.mcpClient = new MCPClient();
+    this.ollamaManager = new OllamaManager();
+    this.mcpClient = new MCPClient(this.ollamaManager);
     this.projectManager = new ProjectManager();
-    this.modelManager = new ModelManager(this.vlamaManager, this.mcpClient);
+    this.modelManager = new ModelManager(this.ollamaManager, this.mcpClient);
     this.conversationManager = new ConversationManager(this.modelManager);
     this.fileManager = new FileManager();
+    this.modelSelector = new ModelSelector(this.ollamaManager);
   }
 
   /**
@@ -57,40 +60,66 @@ export class LLMCLI {
     this.currentProject = projectConfig;
 
     // Configurar modelo
-    if (options.model) {
-      await this.modelManager.setProjectModel(projectConfig.path, options.model);
-    } else {
+    let selectedModel = options.model;
+    
+    if (!selectedModel) {
       const defaultModel = await this.configManager.getDefaultModel();
       if (defaultModel) {
-        await this.modelManager.setProjectModel(projectConfig.path, defaultModel);
+        // Verificar se o modelo padrão está disponível
+        selectedModel = await this.modelSelector.ensureModelAvailable(defaultModel);
+      } else {
+        // Nenhum modelo padrão, usar seleção interativa
+        Logger.info('🤖 Nenhum modelo padrão configurado. Vamos escolher um!');
+        selectedModel = await this.modelSelector.selectModel();
       }
+    } else {
+      // Verificar se o modelo especificado está disponível
+      selectedModel = await this.modelSelector.ensureModelAvailable(selectedModel);
+    }
+
+    // Configurar modelo no projeto
+    await this.modelManager.setProjectModel(projectConfig.path, selectedModel);
+    this.currentProject.model = selectedModel;
+
+    // Salvar modelo na configuração do projeto
+    await this.projectManager.updateProjectModel(projectConfig.path, selectedModel);
+
+    // Definir como modelo padrão se for primeira execução
+    if (isFirstRun) {
+      await this.configManager.setDefaultModel(selectedModel);
+      Logger.info(`💾 Modelo ${selectedModel} definido como padrão global`);
     }
 
     Logger.success(`✅ Projeto inicializado em: ${projectConfig.path}`);
     Logger.info(`📁 Estrutura do projeto: ${projectConfig.language}/${projectConfig.framework}`);
+    Logger.info(`🤖 Modelo configurado: ${selectedModel}`);
     
-    if (projectConfig.model) {
-      Logger.info(`🤖 Modelo configurado: ${projectConfig.model}`);
-    }
+    // Mostrar próximos passos
+    Logger.newline();
+    Logger.info('🎯 Próximos passos:');
+    Logger.info('  1. Use "llm chat" para iniciar uma conversa com a IA');
+    Logger.info('  2. Use "llm status" para ver o status do projeto');
+    Logger.info('  3. Use "llm change-model" para trocar o modelo se necessário');
   }
 
   /**
    * Troca o modelo LLM para o projeto atual
    */
-  async changeModel(modelName: string): Promise<void> {
+  async changeModel(modelName?: string): Promise<void> {
     if (!this.currentProject) {
       throw new Error('Nenhum projeto ativo. Execute "llm init" primeiro.');
     }
 
+    if (!modelName) {
+      // Usar seleção interativa
+      Logger.info('🔄 Vamos escolher um novo modelo para o projeto!');
+      modelName = await this.modelSelector.selectModel();
+    }
+
     Logger.info(`🔄 Trocando modelo para: ${modelName}`);
     
-    // Verificar se o modelo está disponível
-    const availableModels = await this.vlamaManager.listModels();
-    const modelExists = availableModels.some(m => m.name === modelName);
-    
-    if (!modelExists) {
-      throw new Error(`Modelo "${modelName}" não encontrado. Use "llm list-models" para ver modelos disponíveis.`);
-    }
+    // Verificar se o modelo está disponível e baixar se necessário
+    modelName = await this.modelSelector.ensureModelAvailable(modelName);
 
     // Atualizar modelo do projeto
     await this.modelManager.setProjectModel(this.currentProject.path, modelName);
@@ -102,16 +131,17 @@ export class LLMCLI {
   /**
    * Define o modelo base padrão para todos os projetos
    */
-  async setDefaultModel(modelName: string): Promise<void> {
+  async setDefaultModel(modelName?: string): Promise<void> {
+    if (!modelName) {
+      // Usar seleção interativa
+      Logger.info('⚙️ Vamos escolher um modelo padrão para todos os projetos!');
+      modelName = await this.modelSelector.selectModel();
+    }
+
     Logger.info(`⚙️ Definindo modelo padrão: ${modelName}`);
     
-    // Verificar disponibilidade do modelo
-    const availableModels = await this.vlamaManager.listModels();
-    const modelExists = availableModels.some(m => m.name === modelName);
-    
-    if (!modelExists) {
-      throw new Error(`Modelo "${modelName}" não encontrado. Use "llm list-models" para ver modelos disponíveis.`);
-    }
+    // Verificar disponibilidade do modelo e baixar se necessário
+    modelName = await this.modelSelector.ensureModelAvailable(modelName);
 
     await this.configManager.setDefaultModel(modelName);
     Logger.success(`✅ Modelo padrão definido: ${modelName}`);
@@ -123,7 +153,7 @@ export class LLMCLI {
   async listModels(): Promise<void> {
     Logger.info('📋 Modelos disponíveis:');
     
-    const availableModels = await this.vlamaManager.listModels();
+    const availableModels = await this.ollamaManager.listModels();
     const defaultModel = await this.configManager.getDefaultModel();
     
     availableModels.forEach((model, index) => {
@@ -142,6 +172,39 @@ export class LLMCLI {
    */
   async startChat(specificModel?: string): Promise<void> {
     Logger.info('💬 Iniciando modo conversacional...');
+    
+    // Verificar se o projeto está inicializado
+    if (!this.currentProject) {
+      const projectPath = process.cwd();
+      const isInitialized = await this.projectManager.isProjectInitialized(projectPath);
+      
+      if (!isInitialized) {
+        Logger.warn('⚠️ Projeto não inicializado!');
+        Logger.info('📁 Para usar o chat, você precisa inicializar o projeto primeiro.');
+        Logger.info('💡 Execute o comando: llm init');
+        Logger.newline();
+        
+        // Perguntar se quer inicializar
+        const { shouldInit } = await this.conversationManager.askUser({
+          type: 'confirm',
+          message: 'Deseja inicializar o projeto agora?',
+          default: true
+        });
+        
+        if (shouldInit) {
+          Logger.info('🚀 Inicializando projeto...');
+          await this.initializeProject({});
+          Logger.success('✅ Projeto inicializado! Iniciando chat...');
+        } else {
+          Logger.info('❌ Chat cancelado. Execute "llm init" quando estiver pronto.');
+          return;
+        }
+      } else {
+        // Carregar projeto existente
+        this.currentProject = await this.projectManager.loadProject(projectPath);
+        Logger.info(`📁 Projeto carregado: ${this.currentProject.name}`);
+      }
+    }
     
     // Determinar modelo a ser usado
     let modelToUse = specificModel;

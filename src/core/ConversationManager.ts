@@ -65,7 +65,7 @@ export class ConversationManager {
       name: 'load',
       description: 'Carrega uma conversa salva',
       usage: '/load <nome>',
-      examples: ['/load sessao-importante'],
+      examples: ['/load load sessao-importante'],
       handler: this.handleLoad.bind(this)
     });
 
@@ -83,6 +83,36 @@ export class ConversationManager {
       usage: '/exit',
       examples: ['/exit'],
       handler: this.handleExit.bind(this)
+    });
+  }
+
+  /**
+   * Pergunta algo ao usuário
+   */
+  async askUser(options: { type: 'confirm'; message: string; default?: boolean }): Promise<{ shouldInit: boolean }> {
+    return new Promise((resolve) => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      const defaultText = options.default ? ' (S/n)' : ' (s/N)';
+      const message = `${options.message}${defaultText}: `;
+      
+      rl.question(message, (answer) => {
+        rl.close();
+        
+        const normalizedAnswer = answer.toLowerCase().trim();
+        let result = options.default || false;
+        
+        if (normalizedAnswer === 's' || normalizedAnswer === 'sim' || normalizedAnswer === 'y' || normalizedAnswer === 'yes') {
+          result = true;
+        } else if (normalizedAnswer === 'n' || normalizedAnswer === 'não' || normalizedAnswer === 'no') {
+          result = false;
+        }
+        
+        resolve({ shouldInit: result });
+      });
     });
   }
 

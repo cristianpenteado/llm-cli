@@ -256,11 +256,11 @@ llm rollback
 }
 ```
 
-### 17. Configuração Vlama
+### 17. Configuração Ollama
 ```bash
 # Editar ~/.llm-cli/config.json
 {
-  "vlamaConfig": {
+  "ollamaConfig": {
     "modelsPath": "~/.local/share/ollama/models",
     "serverUrl": "http://localhost",
     "port": 11434,
