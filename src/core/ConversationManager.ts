@@ -1,7 +1,7 @@
 import { ModelManager } from './ModelManager';
 import { ChatSession, ChatMessage, ChatCommand, ProjectContext } from '../types';
 import { Logger } from '../utils/Logger';
-import * as readline from 'readline';
+
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -90,30 +90,18 @@ export class ConversationManager {
    * Pergunta algo ao usuário
    */
   async askUser(options: { type: 'confirm'; message: string; default?: boolean }): Promise<{ shouldInit: boolean }> {
-    return new Promise((resolve) => {
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
-      const defaultText = options.default ? ' (S/n)' : ' (s/N)';
-      const message = `${options.message}${defaultText}: `;
-      
-      rl.question(message, (answer) => {
-        rl.close();
-        
-        const normalizedAnswer = answer.toLowerCase().trim();
-        let result = options.default || false;
-        
-        if (normalizedAnswer === 's' || normalizedAnswer === 'sim' || normalizedAnswer === 'y' || normalizedAnswer === 'yes') {
-          result = true;
-        } else if (normalizedAnswer === 'n' || normalizedAnswer === 'não' || normalizedAnswer === 'no') {
-          result = false;
-        }
-        
-        resolve({ shouldInit: result });
-      });
-    });
+    const inquirer = require('inquirer');
+    
+    const { shouldInit } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'shouldInit',
+        message: options.message,
+        default: options.default || false
+      }
+    ]);
+    
+    return { shouldInit };
   }
 
   /**
@@ -158,23 +146,25 @@ export class ConversationManager {
    * Loop principal da conversa
    */
   private async conversationLoop(): Promise<void> {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      prompt: '🤖 > '
-    });
-
-    rl.prompt();
-
-    rl.on('line', async (input) => {
-      const trimmedInput = input.trim();
-      
-      if (trimmedInput === '') {
-        rl.prompt();
-        return;
-      }
-
+    const inquirer = require('inquirer');
+    
+    while (true) {
       try {
+        const { userInput } = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'userInput',
+            message: '🤖 >',
+            prefix: ''
+          }
+        ]);
+
+        const trimmedInput = userInput.trim();
+        
+        if (trimmedInput === '') {
+          continue;
+        }
+
         // Verificar se é um comando
         if (trimmedInput.startsWith('/')) {
           await this.handleCommand(trimmedInput);
@@ -185,14 +175,7 @@ export class ConversationManager {
       } catch (error) {
         Logger.error('Erro ao processar entrada:', error);
       }
-
-      rl.prompt();
-    });
-
-    rl.on('close', () => {
-      Logger.info('👋 Conversa encerrada');
-      process.exit(0);
-    });
+    }
   }
 
   /**
@@ -249,26 +232,24 @@ export class ConversationManager {
     });
 
     // Perguntar se o usuário quer aplicar as mudanças
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-
-    return new Promise((resolve) => {
-      rl.question('\n❓ Deseja aplicar essas mudanças? (sim/não): ', async (answer) => {
-        rl.close();
-        
-        if (answer.toLowerCase().includes('sim') || answer.toLowerCase().includes('yes')) {
-          Logger.info('✅ Aplicando mudanças...');
-          // Aqui você implementaria a lógica para aplicar as mudanças
-          // Por exemplo, usando o FileManager
-        } else {
-          Logger.info('❌ Mudanças não aplicadas');
-        }
-        
-        resolve();
-      });
-    });
+    const inquirer = require('inquirer');
+    
+    const { shouldApply } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'shouldApply',
+        message: '❓ Deseja aplicar essas mudanças?',
+        default: false
+      }
+    ]);
+    
+    if (shouldApply) {
+      Logger.info('✅ Aplicando mudanças...');
+      // Aqui você implementaria a lógica para aplicar as mudanças
+      // Por exemplo, usando o FileManager
+    } else {
+      Logger.info('❌ Mudanças não aplicadas');
+    }
   }
 
   /**
