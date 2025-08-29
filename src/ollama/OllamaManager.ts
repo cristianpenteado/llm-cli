@@ -620,11 +620,25 @@ export class OllamaManager {
     setImmediate(async () => {
       try {
         // Parar processo anterior se existir
-        if (this.persistentModelProcess) {
+        if (this.persistentModelProcess && this.persistentModelProcess.pid) {
           if (this.verboseLogs) {
             Logger.ollama(`🔄 [LOGS] Parando processo anterior PID: ${this.persistentModelProcess.pid}`);
           }
-          this.persistentModelProcess.kill('SIGTERM');
+          try {
+            // Usar kill do sistema para processo independente
+            const { exec } = await import('child_process');
+            const { promisify } = await import('util');
+            const execAsync = promisify(exec);
+            
+            await execAsync(`kill -TERM ${this.persistentModelProcess.pid}`);
+            if (this.verboseLogs) {
+              Logger.ollama(`✅ [LOGS] Processo anterior ${this.persistentModelProcess.pid} parado`);
+            }
+          } catch (error) {
+            if (this.verboseLogs) {
+              Logger.ollama(`⚠️ [LOGS] Erro ao parar processo anterior: ${error}`);
+            }
+          }
           this.persistentModelProcess = null;
         }
 
@@ -824,12 +838,45 @@ export class OllamaManager {
    * Para a sessão ativa do modelo
    */
   async stopModelSession(): Promise<void> {
-    if (this.activeSession) {
+    if (this.activeSession && this.activeSession.process) {
       try {
-        this.activeSession.process.kill('SIGTERM');
+        if (this.activeSession.process.pid) {
+          // Usar kill do sistema para processo independente
+          const { exec } = await import('child_process');
+          const { promisify } = await import('util');
+          const execAsync = promisify(exec);
+          
+          await execAsync(`kill -TERM ${this.activeSession.process.pid}`);
+          if (this.verboseLogs) {
+            Logger.ollama(`✅ [LOGS] Sessão do modelo ${this.activeSession.modelName} parada`);
+          }
+        }
         this.activeSession = null;
       } catch (error) {
+        if (this.verboseLogs) {
+          Logger.ollama(`⚠️ [LOGS] Erro ao parar sessão: ${error}`);
+        }
         Logger.warn('Erro ao parar sessão do modelo:', error);
+      }
+    }
+
+    // Parar processo persistente se existir
+    if (this.persistentModelProcess && this.persistentModelProcess.pid) {
+      try {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        
+        await execAsync(`kill -TERM ${this.persistentModelProcess.pid}`);
+        if (this.verboseLogs) {
+          Logger.ollama(`✅ [LOGS] Processo persistente ${this.persistentModelProcess.pid} parado`);
+        }
+        this.persistentModelProcess = null;
+      } catch (error) {
+        if (this.verboseLogs) {
+          Logger.ollama(`⚠️ [LOGS] Erro ao parar processo persistente: ${error}`);
+        }
+        Logger.warn('Erro ao parar processo persistente:', error);
       }
     }
   }
