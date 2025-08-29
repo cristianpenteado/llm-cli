@@ -632,48 +632,40 @@ export class OllamaManager {
           Logger.ollama(`🚀 [LOGS] Iniciando processo em background para modelo ${modelName}`);
         }
 
-        // Usar nohup para garantir que o processo rode em background
+        // Usar spawn com detached: true para processo verdadeiramente independente
         const { spawn } = await import('child_process');
         
-        // Comando: nohup ollama run <modelo> > /tmp/ollama-<modelo>.log 2>&1 &
+        // Comando: ollama run <modelo> > /tmp/ollama-<modelo>.log 2>&1 &
         const logFile = `/tmp/ollama-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}.log`;
         
-        this.persistentModelProcess = spawn('nohup', [
-          'ollama', 'run', modelName
-        ], {
-          stdio: ['pipe', 'pipe', 'pipe'],
-          detached: true, // Processo independente
-          shell: true
+        // Criar processo completamente independente
+        const child = spawn('ollama', ['run', modelName], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          detached: true, // Processo independente do pai
+          shell: false
         });
 
+        // Redirecionar stdout e stderr para arquivo de log
+        const fs = await import('fs');
+        const writeStream = fs.createWriteStream(logFile, { flags: 'a' });
+        
+        child.stdout?.pipe(writeStream);
+        child.stderr?.pipe(writeStream);
+        
+        // Desconectar o processo filho do processo pai
+        child.unref();
+        
+        // Armazenar apenas o PID para referência
+        this.persistentModelProcess = { pid: child.pid };
+
         if (this.verboseLogs) {
-          Logger.ollama(`🔍 [LOGS] Processo nohup iniciado com PID: ${this.persistentModelProcess.pid}`);
+          Logger.ollama(`🔍 [LOGS] Processo independente iniciado com PID: ${child.pid}`);
           Logger.ollama(`🔍 [LOGS] Logs salvos em: ${logFile}`);
         }
 
-        // Configurar listeners para o processo
-        this.persistentModelProcess.on('error', (error: Error) => {
-          if (this.verboseLogs) {
-            Logger.ollama(`❌ [LOGS] Erro no processo: ${error}`);
-          }
-          Logger.error('Erro no processo persistente:', error);
-        });
-
-        this.persistentModelProcess.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
-          if (this.verboseLogs) {
-            Logger.ollama(`⚠️ [LOGS] Processo encerrado: código ${code}, sinal ${signal}`);
-          }
-          Logger.warn(`Processo persistente encerrado: código ${code}, sinal ${signal}`);
-          this.persistentModelProcess = null;
-        });
-
-        // Aguardar um pouco para o processo estar ativo
-        setTimeout(() => {
-          if (this.persistentModelProcess && this.persistentModelProcess.pid) {
-            Logger.ollama(`✅ Modelo ${modelName} iniciado em modo persistente (PID: ${this.persistentModelProcess.pid})`);
-            Logger.ollama(`📝 Logs disponíveis em: ${logFile}`);
-          }
-        }, 2000);
+        // Log de sucesso imediato (sem aguardar)
+        Logger.ollama(`✅ Modelo ${modelName} iniciado em modo persistente (PID: ${child.pid})`);
+        Logger.ollama(`📝 Logs disponíveis em: ${logFile}`);
         
       } catch (error) {
         if (this.verboseLogs) {
