@@ -1,147 +1,235 @@
-# 🚀 **LLM CLI - AI Agent Terminal**
+# LLM CLI
 
-> **CLI inteligente para desenvolvimento com modelos LLMs locais**  
-> **Desenvolvido para a comunidade ❤️**
+> **AI Agent Terminal** - Desenvolvido para a comunidade ❤️
 
-## 🌟 **Principais Características**
+Uma CLI inteligente que funciona como um agente de IA local, integrando-se diretamente com modelos LLM locais via Ollama. A CLI agora inclui um servidor MCP integrado e otimizações de performance para respostas ultra-rápidas.
 
-- **🤖 AI Agent Local**: Funciona offline com modelos locais via Ollama
-- **🎨 Interface Elegante**: Banner LLM CLI em degradê roxo com ASCII art
-- **🔄 MCP Integrado**: Servidor MCP interno com fallback para Ollama
-- **📁 Inicialização Inteligente**: Detecta linguagem/framework automaticamente
-- **💬 Chat Interativo**: Interface conversacional com comandos especiais
-- **⚡ Seleção Intuitiva**: Navegação com setas e confirmações visuais
-- **🔒 Privacidade Total**: Tudo roda localmente, sem envio de dados
+## 🚀 Características Principais
 
-## 🎮 **Como Funciona**
+### ✨ **Performance Otimizada**
+- **Cache inteligente** de respostas e modelos para respostas instantâneas
+- **Timeouts configuráveis** para evitar esperas longas
+- **Processamento assíncrono** para melhor responsividade
+- **Fallback automático** entre MCP e Ollama direto
 
-### 1. **Primeira Execução - Configuração Inicial**
+### 🤖 **Modelo Padrão Automático**
+- **Download automático** do `phi3:mini` na primeira inicialização
+- **Verificação inteligente** de modelos disponíveis
+- **Fallback automático** para download quando necessário
+- **Inicialização automática** do OllamaManager
+
+### 🔌 **Arquitetura Integrada**
+- **Servidor MCP integrado** (não depende de processos externos)
+- **Comunicação direta** com Ollama para máxima velocidade
+- **Cache em memória** para operações repetidas
+- **Otimizações de rede** para modelos locais
+
+### 🎯 **Funcionalidades Inteligentes**
+- **Detecção automática** de linguagem e framework do projeto
+- **Contexto inteligente** baseado na estrutura do projeto
+- **Sugestões contextuais** para melhor produtividade
+- **Interface conversacional** natural e intuitiva
+
+## 📦 Instalação
+
+### Pré-requisitos
+- **Node.js** 18+ 
+- **Ollama** instalado e configurado
+
+### Instalar CLI
 ```bash
-# A CLI oferece modelos recomendados automaticamente
-llm init
+# Instalar globalmente
+npm install -g llm-cli
 
-# Recomenda modelos baseados em:
-# - Tamanho e eficiência
-# - Especialização (código, geral, etc.)
-# - Compatibilidade com diferentes sistemas
+# Ou usar npx
+npx llm-cli
 ```
 
-### 2. **Inicialização de Projeto - Modelo Automático**
+### Instalar Ollama
 ```bash
-# Em qualquer pasta de projeto
-llm init
+# Linux/macOS
+curl -fsSL https://ollama.ai/install.sh | sh
 
-# A CLI:
-# ✅ Detecta linguagem/framework automaticamente
-# 🤖 Sugere modelos recomendados
-# 📝 Cria estrutura de projeto com contexto
-# 🔧 Configura modelo padrão
-# 📁 Atualiza .gitignore automaticamente
+# Windows
+# Baixar de https://ollama.ai/download
 ```
 
-### 3. **Chat Inteligente com Fallback**
+## 🚀 Uso Rápido
+
+### 1. **Inicializar Projeto** (Download automático do phi3:mini)
 ```bash
-# Iniciar conversa
+cd seu-projeto
+llm init
+# ✅ phi3:mini será baixado automaticamente se não existir
+```
+
+### 2. **Iniciar Chat** (Respostas ultra-rápidas)
+```bash
 llm chat
-
-# Se o projeto não estiver inicializado:
-# ⚠️ "Projeto não inicializado! Deseja inicializar agora? (S/n)"
-# 🚀 Inicializa automaticamente se confirmado
-# 💬 Inicia chat com modelo configurado
-
-# Fallback automático:
-# 🔌 Tenta conectar via MCP integrado
-# ⚠️ Se falhar, usa Ollama diretamente
-# ✅ Chat funciona independente do protocolo
+# ⚡ Cache inteligente para respostas instantâneas
+# 🔄 Fallback automático se MCP falhar
 ```
 
-## ⚡ **Modelos Recomendados**
-
-### **Modelos Leves e Eficientes**
-- `phi3:mini` - 3.8B parâmetros, rápido e eficiente
-- `gemma2:2b` - 2B parâmetros, muito leve
-- `mistral:7b-instruct` - 7B parâmetros, equilibrado
-
-### **Modelos Especializados em Código**
-- `deepseek-coder:6.7b-instruct` - Excelente para desenvolvimento
-- `codellama:7b-instruct` - Especializado em código da Meta
-- `codegemma:7b` - Foco em programação
-
-### **Modelos Gerais de Alta Qualidade**
-- `llama3.1:8b-instruct` - Qualidade superior, versátil
-- `qwen2.5:7b-instruct` - Boa performance geral
-- `phi3:3.8b-instruct` - Equilibrado entre velocidade e qualidade
-
-## 🛠️ **Comandos Disponíveis**
-
-### **Inicialização e Configuração**
+### 3. **Comandos Principais**
 ```bash
-llm init                    # Inicializa projeto com modelo automático
-llm set-default-model       # Define modelo padrão global
-llm change-model           # Troca modelo do projeto atual
+llm init          # Inicializar projeto (baixa modelo padrão)
+llm chat          # Chat conversacional otimizado
+llm status        # Status do projeto e modelo
+llm list-models   # Listar modelos disponíveis
+llm change-model  # Trocar modelo do projeto
 ```
 
-### **Chat e Interação**
+## 🎯 Casos de Uso
+
+### **Desenvolvedores**
+- **Code Review** rápido com contexto do projeto
+- **Debugging** assistido por IA
+- **Refatoração** inteligente de código
+- **Documentação** automática
+
+### **Arquitetos**
+- **Análise** de estrutura de projetos
+- **Recomendações** de padrões
+- **Otimizações** de performance
+- **Migrações** assistidas
+
+### **DevOps**
+- **Análise** de logs e métricas
+- **Automação** de processos
+- **Troubleshooting** inteligente
+- **Monitoramento** proativo
+
+## ⚡ Otimizações de Performance
+
+### **Cache Inteligente**
+- **Respostas em cache** por 30 segundos
+- **Modelos em cache** por 10 segundos
+- **Hash de prompts** para identificação única
+- **Limpeza automática** de cache expirado
+
+### **Timeouts Configuráveis**
+- **Resposta do modelo**: 30 segundos
+- **Download de modelo**: 5 minutos
+- **Listagem de modelos**: 5 segundos
+- **Inicialização**: 10 segundos
+
+### **Processamento Assíncrono**
+- **Modelos em background** para não bloquear
+- **Cache limpo** em paralelo
+- **Verificações não-bloqueantes** de status
+- **Fallbacks automáticos** para melhor UX
+
+## 🔧 Configuração
+
+### **Modelo Padrão**
 ```bash
-llm chat                   # Inicia modo conversacional
-llm list-models           # Lista modelos disponíveis
+# O phi3:mini é baixado automaticamente
+# Para usar outros modelos:
+ollama pull nome-do-modelo
+llm change-model nome-do-modelo
 ```
 
-### **Comandos do Chat** (dentro do `llm chat`)
+### **Cache e Performance**
 ```bash
-/help                     # Mostra ajuda sobre comandos
-/change-model <model>     # Troca modelo durante a sessão
-/status                   # Mostra status da sessão atual
-/clear                    # Limpa histórico da conversa
-/save [nome]              # Salva conversa atual
-/load <nome>              # Carrega conversa salva
-/context                  # Mostra contexto do projeto
-/exit                     # Sai da conversa
+# Limpar cache manualmente
+llm clear-cache
+
+# Ver estatísticas
+llm status
 ```
 
-## 🔒 **Segurança e Privacidade**
+## 🏗️ Arquitetura
 
-- **🔐 100% Local**: Nenhum dado é enviado para servidores externos
-- **🏠 Ollama Local**: Modelos rodam na sua máquina
-- **📁 Projetos Privados**: Configurações ficam na pasta do projeto
-- **🚫 Sem Telemetria**: Não coletamos dados de uso
-
-## 🚀 **Próximos Passos**
-
-1. **Instale a CLI**: `npm install -g llm-cli`
-2. **Configure Ollama**: `ollama pull phi3:mini`
-3. **Inicialize Projeto**: `llm init`
-4. **Comece a Conversar**: `llm chat`
-
-## 🏗️ **Arquitetura**
-
+### **Componentes Principais**
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   LLM CLI       │    │   MCP Server    │    │   Ollama        │
-│   (Interface)   │◄──►│   (Integrado)   │◄──►│   (Local LLM)   │
+│   LLMCLI        │    │  OllamaManager  │    │   MCPServer     │
+│   (Orquestrador)│◄──►│  (Cache + MCP)  │◄──►│  (Integrado)    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Project       │    │  Conversation   │    │  Model         │
-│  Manager       │    │  Manager        │    │  Manager       │
+│ProjectManager   │    │  Conversation   │    │   FileManager   │
+│(Projetos)      │    │  Manager        │    │  (Arquivos)     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## 🤝 **Contribuição**
+### **Fluxo de Performance**
+1. **Cache Check** → Resposta instantânea se disponível
+2. **MCP Integrado** → Comunicação direta sem processos externos
+3. **Ollama Fallback** → Resposta direta se MCP falhar
+4. **Cache Update** → Armazenar para futuras consultas
 
-Contribuições são bem-vindas! Este projeto é desenvolvido para a comunidade.
+## 🚀 Modelos Recomendados
 
-1. **Fork** o repositório
+### **Modelo Padrão (Automático)**
+- **`phi3:mini`** - Leve, rápido, ideal para desenvolvimento
+
+### **Modelos Adicionais**
+- **`llama3.2:3b`** - Equilibrado entre velocidade e qualidade
+- **`mistral:7b`** - Excelente para código e documentação
+- **`codellama:7b`** - Especializado em desenvolvimento
+
+> **💡 Dica**: O `phi3:mini` é baixado automaticamente. Para outros modelos, use `ollama pull nome-do-modelo`
+
+## 🔍 Troubleshooting
+
+### **Modelo não encontrado**
+```bash
+# Baixar manualmente
+ollama pull nome-do-modelo
+
+# Ou usar modelo padrão
+llm change-model phi3:mini
+```
+
+### **Performance lenta**
+```bash
+# Limpar cache
+llm clear-cache
+
+# Verificar status
+llm status
+```
+
+### **Erro de conexão**
+```bash
+# Verificar Ollama
+ollama list
+
+# Reiniciar servidor
+ollama serve
+```
+
+## 🤝 Contribuição
+
+### **Como Contribuir**
+1. **Fork** o projeto
 2. **Crie** uma branch para sua feature
 3. **Commit** suas mudanças
 4. **Push** para a branch
 5. **Abra** um Pull Request
 
-## 📄 **Licença**
+### **Áreas de Melhoria**
+- **Novos modelos** de IA
+- **Otimizações** de performance
+- **Integrações** com outras ferramentas
+- **Testes** e documentação
+
+## 📄 Licença
 
 Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
 
+## 🙏 Agradecimentos
+
+- **Ollama** pela plataforma de modelos locais
+- **Comunidade open-source** pelo suporte contínuo
+- **Contribuidores** que tornaram este projeto possível
+
 ---
 
-**Desenvolvido com ❤️ para a comunidade de desenvolvedores**
+**⭐ Se este projeto te ajudou, considere dar uma estrela!**
+
+**💬 Dúvidas? Abra uma issue ou participe das discussões!**
+
+**🚀 Desenvolvido para a comunidade ❤️**
