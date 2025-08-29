@@ -91,7 +91,7 @@ export class ModelManager {
    */
   async ensureModelReady(modelName: string): Promise<string> {
     try {
-      await this.ollamaManager.ensureModelActive(modelName);
+      // O modelo será gerenciado automaticamente pela sessão contínua
       return modelName;
     } catch (error) {
       Logger.error('Erro ao preparar modelo:', error);

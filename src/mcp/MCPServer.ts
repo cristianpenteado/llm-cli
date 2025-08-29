@@ -13,13 +13,10 @@ export class MCPServer {
 
   async start(): Promise<void> {
     if (this.isRunning) {
-      Logger.mcp('⚠️ Servidor MCP já está rodando');
       return;
     }
     try {
-      Logger.mcp('🚀 Iniciando servidor MCP integrado...');
       this.isRunning = true;
-      Logger.success('✅ Servidor MCP integrado iniciado');
     } catch (error) {
       Logger.error('Erro ao iniciar servidor MCP integrado:', error);
       this.isRunning = false;
@@ -32,9 +29,7 @@ export class MCPServer {
       return;
     }
     try {
-      Logger.mcp('🛑 Parando servidor MCP...');
       this.isRunning = false;
-      Logger.success('✅ Servidor MCP parado');
     } catch (error) {
       Logger.error('Erro ao parar servidor MCP:', error);
     }
@@ -88,7 +83,6 @@ export class MCPServer {
 
   async listModels(): Promise<any> {
     try {
-      Logger.mcp('📋 Listando modelos disponíveis...');
       const models = await this.ollamaManager.listModels();
       return {
         models: models.map(model => ({

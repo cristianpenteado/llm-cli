@@ -9,11 +9,16 @@ export class OllamaManager {
   private cache = new Map<string, { response: string; timestamp: number; ttl: number }>();
   private modelCache = new Map<string, ModelConfig[]>();
   private lastModelList = 0;
-  private readonly CACHE_TTL = 30000; // 30 segundos
-  private readonly MODEL_LIST_CACHE_TTL = 10000; // 10 segundos
+  private readonly CACHE_TTL = 300000; // 5 minutos
+  private readonly MODEL_LIST_CACHE_TTL = 60000; // 1 minuto
   private defaultModel = 'phi3:mini';
   private isInitialized = false;
   private isFirstRun = true; // Adicionado para controlar a primeira execução
+  private activeSession: any = null; // Sessão ativa com o modelo
+
+  constructor() {
+    // Inicializar cache limpo
+  }
 
   /**
    * Inicializa o gerenciador Ollama e baixa o modelo padrão
@@ -350,7 +355,7 @@ export class OllamaManager {
   }
 
   /**
-   * Gera resposta do modelo com otimizações de performance
+   * Gera resposta do modelo com sessão contínua
    */
   async generateResponse(modelName: string, prompt: string, context?: string): Promise<{ response: string }> {
     // Garantir inicialização
@@ -358,30 +363,22 @@ export class OllamaManager {
       await this.initialize();
     }
 
-    const cacheKey = `${modelName}:${this.hashPrompt(prompt)}`;
-    
-    // Verificar cache primeiro
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < cached.ttl) {
-      return { response: cached.response };
-    }
-
     try {
       // Verificar se o modelo existe, se não, tentar baixar
       await this.ensureModelAvailable(modelName);
       
-      // Garantir que o modelo está ativo (assíncrono)
-      this.ensureModelActive(modelName).catch(() => {}); // Não bloquear
+      // Iniciar ou usar sessão ativa
+      if (!this.activeSession || this.activeSession.modelName !== modelName) {
+        await this.startModelSession(modelName);
+      }
 
-      // Usar timeout para evitar esperas longas
-      const response = await Promise.race([
-        this.callOllama(modelName, prompt, context),
-        this.timeoutPromise(30000, 'Timeout: resposta demorou mais de 30s')
-      ]);
+      // Enviar prompt para a sessão ativa
+      const response = await this.sendToActiveSession(prompt, context);
 
       // Cache da resposta
+      const cacheKey = `${modelName}:${this.hashPrompt(prompt)}`;
       this.cache.set(cacheKey, {
-        response: response as string,
+        response: response,
         timestamp: Date.now(),
         ttl: this.CACHE_TTL
       });
@@ -389,7 +386,7 @@ export class OllamaManager {
       // Marcar que não é mais a primeira execução
       this.isFirstRun = false;
 
-      return { response: response as string };
+      return { response: response };
     } catch (error) {
       Logger.error('Erro ao gerar resposta:', error);
       throw error;
@@ -480,12 +477,11 @@ export class OllamaManager {
         reject(error);
       });
       
-      // Timeout progressivo: 60s para primeira execução, 30s para subsequentes
-      const timeout = this.isFirstRun ? 60000 : 30000;
+      // Timeout fixo de 60 segundos para primeira execução
       const timeoutId = setTimeout(() => {
         ollamaProcess.kill('SIGTERM');
-        reject(new Error(`Timeout: resposta demorou mais de ${timeout/1000}s`));
-      }, timeout);
+        reject(new Error('Timeout: resposta demorou mais de 60s'));
+      }, 60000);
       
       // Limpar timeout se o processo terminar antes
       ollamaProcess.on('close', () => clearTimeout(timeoutId));
@@ -592,36 +588,118 @@ export class OllamaManager {
   }
 
   /**
-   * Garante que o modelo está ativo (otimizado)
+   * Inicia uma sessão contínua com o modelo
    */
-  async ensureModelActive(modelName: string): Promise<void> {
+  async startModelSession(modelName: string): Promise<void> {
     try {
-      // Verificar se o modelo já está rodando (sem bloquear)
-      const models = await this.listModels();
-      const model = models.find(m => m.name === modelName);
-      
-      if (model && model.status === 'ready') {
-        return; // Modelo já está ativo
+      // Parar sessão anterior se existir
+      if (this.activeSession) {
+        await this.stopModelSession();
       }
 
-      // Pré-carregar o modelo com um prompt simples
-      Logger.ollama(`🚀 Pré-carregando modelo ${modelName}...`);
+      Logger.ollama(`🚀 Iniciando sessão contínua com ${modelName}...`);
       
-      try {
-        // Usar um timeout mais longo para pré-carregamento
-        const response = await Promise.race([
-          this.callOllama(modelName, "test", ""),
-          this.timeoutPromise(90000, 'Timeout: pré-carregamento demorou mais de 90s')
-        ]);
-        
-        Logger.ollama(`✅ Modelo ${modelName} pré-carregado com sucesso`);
-      } catch (error) {
-        Logger.warn(`Modelo ${modelName} não pôde ser pré-carregado:`, error);
-      }
+      // Iniciar processo ollama run em modo contínuo
+      const { spawn } = await import('child_process');
+      
+      const ollamaProcess = spawn('ollama', ['run', modelName], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      this.activeSession = {
+        modelName,
+        process: ollamaProcess,
+        isReady: false
+      };
+      
+      // Aguardar o modelo estar pronto
+      await this.waitForSessionReady();
+      
+      Logger.ollama(`✅ Sessão contínua iniciada com ${modelName}`);
       
     } catch (error) {
-      Logger.warn(`Erro ao garantir modelo ativo ${modelName}:`, error);
+      Logger.error(`Erro ao iniciar sessão com ${modelName}:`, error);
+      throw error;
     }
+  }
+
+  /**
+   * Para a sessão ativa do modelo
+   */
+  async stopModelSession(): Promise<void> {
+    if (this.activeSession) {
+      try {
+        this.activeSession.process.kill('SIGTERM');
+        this.activeSession = null;
+        Logger.ollama('🛑 Sessão do modelo parada');
+      } catch (error) {
+        Logger.warn('Erro ao parar sessão do modelo:', error);
+      }
+    }
+  }
+
+  /**
+   * Aguarda a sessão estar pronta
+   */
+  private async waitForSessionReady(): Promise<void> {
+    if (!this.activeSession) return;
+    
+    return new Promise((resolve) => {
+      const checkReady = () => {
+        if (this.activeSession && this.activeSession.process.pid) {
+          this.activeSession.isReady = true;
+          resolve();
+        } else {
+          setTimeout(checkReady, 100);
+        }
+      };
+      checkReady();
+    });
+  }
+
+  /**
+   * Envia prompt para a sessão ativa
+   */
+  private async sendToActiveSession(prompt: string, context?: string): Promise<string> {
+    if (!this.activeSession || !this.activeSession.isReady) {
+      throw new Error('Sessão do modelo não está ativa');
+    }
+
+    return new Promise((resolve, reject) => {
+      const { process } = this.activeSession;
+      
+      let response = '';
+      let hasResponse = false;
+      
+      // Timeout para resposta
+      const timeoutId = setTimeout(() => {
+        if (!hasResponse) {
+          reject(new Error('Timeout: resposta demorou mais de 30s'));
+        }
+      }, 30000);
+      
+      // Capturar resposta
+      process.stdout.on('data', (data: Buffer) => {
+        response += data.toString();
+        if (response.includes('\n') && !hasResponse) {
+          hasResponse = true;
+          clearTimeout(timeoutId);
+          resolve(response.trim());
+        }
+      });
+      
+      // Enviar prompt
+      process.stdin.write(prompt + '\n');
+      
+      // Se não houver resposta em 5s, considerar como resposta completa
+      setTimeout(() => {
+        if (!hasResponse) {
+          hasResponse = true;
+          clearTimeout(timeoutId);
+          resolve(response.trim() || 'Resposta vazia do modelo');
+        }
+      }, 5000);
+    });
   }
 
   /**

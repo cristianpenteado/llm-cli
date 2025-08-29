@@ -145,7 +145,7 @@ export class MCPClient {
       Logger.mcp(`🚀 Iniciando modelo ${modelName} via MCP...`);
       
       // Usar diretamente o servidor MCP integrado
-      await this.ollamaManager.ensureModelActive(modelName);
+      // O modelo será gerenciado automaticamente pela sessão contínua
       Logger.mcp(`✅ Modelo ${modelName} iniciado via MCP integrado`);
       
     } catch (error) {
