@@ -51,12 +51,9 @@ export class MCPServer {
       const cached = this.responseCache.get(cacheKey);
       
       if (cached && Date.now() - cached.timestamp < cached.ttl) {
-        Logger.mcp('⚡ Resposta retornada do cache MCP');
         return cached.response;
       }
 
-      Logger.mcp(`💬 Processando chat para modelo: ${modelName}`);
-      
       // Processar em paralelo para melhor performance
       const [ollamaResponse] = await Promise.all([
         this.ollamaManager.generateResponse(modelName, prompt, context),

@@ -177,7 +177,6 @@ export class OllamaManager {
     // Verificar cache primeiro
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < cached.ttl) {
-      Logger.ollama('⚡ Resposta retornada do cache');
       return { response: cached.response };
     }
 
@@ -188,8 +187,6 @@ export class OllamaManager {
       // Garantir que o modelo está ativo (assíncrono)
       this.ensureModelActive(modelName).catch(() => {}); // Não bloquear
 
-      Logger.ollama(`💬 Gerando resposta do modelo: ${modelName}`);
-      
       // Usar timeout para evitar esperas longas
       const response = await Promise.race([
         this.callOllama(modelName, prompt, context),

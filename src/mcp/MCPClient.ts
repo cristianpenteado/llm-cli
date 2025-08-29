@@ -70,28 +70,16 @@ export class MCPClient {
   /**
    * Envia prompt para o modelo via MCP
    */
-  async sendPrompt(modelName: string, prompt: string, context?: string): Promise<ModelResponse> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
+  async sendPrompt(modelName: string, prompt: string, context?: string): Promise<any> {
     try {
-      Logger.mcp(`💬 Enviando prompt para modelo ${modelName} via MCP...`);
-      
+      if (!this.isConnectedToServer()) {
+        await this.connect();
+      }
+
       // Usar diretamente o servidor MCP integrado
       const response = await this.mcpServer.processChatRequest(modelName, prompt, context);
-
-      // Processar resposta do modelo
-      const modelResponse: ModelResponse = {
-        content: response.content[0]?.text || '',
-        changes: this.parseChanges(response.changes || []),
-        suggestions: response.suggestions || [],
-        confidence: response.confidence || 0.8
-      };
-
-      Logger.mcp('✅ Resposta recebida via MCP integrado');
-      return modelResponse;
       
+      return response;
     } catch (error) {
       Logger.error('Erro ao enviar prompt via MCP:', error);
       throw error;

@@ -107,42 +107,35 @@ export class ConversationManager {
   }
 
   /**
-   * Inicia uma nova conversa
+   * Inicia a conversa com o modelo
    */
   async startConversation(modelName: string): Promise<void> {
+    this.currentSession = {
+      id: uuidv4(),
+      model: modelName,
+      context: {
+        projectPath: process.cwd(),
+        currentFile: undefined,
+        recentFiles: [],
+        language: 'Unknown',
+        framework: 'Unknown',
+        dependencies: []
+      },
+      startTime: new Date(),
+      messages: []
+    };
+
+    // Mostrar banner do chat
     Banner.showChat();
-    Logger.info('💬 Iniciando nova conversa...');
+    
+    // Mostrar informações essenciais
+    console.log(chalk.hex('#8B5CF6').bold(`🤖 Modelo: ${modelName}`));
+    console.log(chalk.hex('#A78BFA')('💡 Digite suas perguntas ou comandos. Use /help para ver comandos disponíveis.'));
+    console.log(chalk.hex('#C4B5FD')('🔄 Digite /exit para sair do chat.'));
+    console.log('\n');
 
-    try {
-      // Criar nova sessão
-      this.currentSession = {
-        id: uuidv4(),
-        model: modelName,
-        startTime: new Date(),
-        messages: [],
-        context: this.projectContext || {
-          projectPath: process.cwd(),
-          currentFile: undefined,
-          recentFiles: [],
-          language: 'Unknown',
-          framework: 'Unknown',
-          dependencies: []
-        }
-      };
-
-      // Adicionar mensagem de sistema
-      this.addMessage('system', `Sessão iniciada com modelo ${modelName}. Digite /help para ver comandos disponíveis.`);
-
-      Logger.success('✅ Conversa iniciada');
-      Logger.info('💡 Digite suas perguntas ou use /help para ver comandos disponíveis');
-
-      // Iniciar loop de conversa
-      await this.conversationLoop();
-
-    } catch (error) {
-      Logger.error('Erro ao iniciar conversa:', error);
-      throw error;
-    }
+    // Iniciar loop de conversa
+    await this.conversationLoop();
   }
 
   /**
@@ -151,23 +144,15 @@ export class ConversationManager {
   private async conversationLoop(): Promise<void> {
     const inquirer = (await import('inquirer')).default;
     
-    // Mostrar instruções iniciais
-    this.showChatInstructions();
-    
     while (true) {
       try {
-        // Criar uma interface mais elegante para o input
+        // Mostrar prompt de input com modelo
         const { userInput } = await inquirer.prompt([
           {
             type: 'input',
             name: 'userInput',
-            message: '',
-            prefix: '',
-            suffix: '',
-            transformer: (input: string) => {
-              // Destacar o input do usuário
-              return chalk.hex('#8B5CF6').bold(`🤖 ${input}`);
-            }
+            message: chalk.hex('#8B5CF6').bold(`[${this.currentSession?.model}] `) + chalk.hex('#A78BFA')('Digite sua mensagem:'),
+            prefix: '💬'
           }
         ]);
 
@@ -177,22 +162,40 @@ export class ConversationManager {
           continue;
         }
 
-        // Mostrar separador visual
-        this.showInputSeparator(trimmedInput);
-
-        // Verificar se é um comando
-        if (trimmedInput.startsWith('/')) {
-          await this.handleCommand(trimmedInput);
-        } else {
-          // Processar mensagem do usuário
-          await this.processUserMessage(trimmedInput);
+        // Verificar comandos especiais
+        if (trimmedInput === '/exit') {
+          console.log(chalk.hex('#8B5CF6').bold('👋 Até logo!'));
+          break;
         }
 
-        // Mostrar separador após resposta
-        this.showResponseSeparator();
+        if (trimmedInput === '/help') {
+          this.showHelp();
+          continue;
+        }
+
+        if (trimmedInput === '/clear') {
+          this.clearConversation();
+          continue;
+        }
+
+        if (trimmedInput === '/status') {
+          this.showStatus();
+          continue;
+        }
+
+        // Mostrar input do usuário
+        this.showInputSeparator(trimmedInput);
+        
+        // Processar mensagem do usuário
+        await this.processUserMessage(trimmedInput);
         
       } catch (error) {
-        Logger.error('Erro ao processar entrada:', error);
+        if (error instanceof Error && error.message === 'User force closed') {
+          console.log(chalk.hex('#8B5CF6').bold('👋 Até logo!'));
+          break;
+        }
+        Logger.error('Erro no loop de conversa:', error);
+        break;
       }
     }
   }
@@ -620,5 +623,46 @@ export class ConversationManager {
     return new Promise((_, reject) => {
       setTimeout(() => reject(new Error(message)), ms);
     });
+  }
+
+  /**
+   * Mostra ajuda sobre comandos disponíveis
+   */
+  private showHelp(): void {
+    console.log('\n');
+    console.log(chalk.hex('#8B5CF6')('┌─ ' + chalk.bold('💡 COMANDOS DISPONÍVEIS') + ' ─' + '─'.repeat(35) + '┐'));
+    console.log(chalk.hex('#A78BFA')('  /help     - Mostra esta ajuda'));
+    console.log(chalk.hex('#A78BFA')('  /clear    - Limpa o histórico da conversa'));
+    console.log(chalk.hex('#A78BFA')('  /status   - Mostra status da sessão atual'));
+    console.log(chalk.hex('#A78BFA')('  /exit     - Sai do chat'));
+    console.log(chalk.hex('#C4B5FD')('└' + '─'.repeat(62) + '┘'));
+    console.log('\n');
+  }
+
+  /**
+   * Limpa o histórico da conversa
+   */
+  private clearConversation(): void {
+    if (this.currentSession) {
+      this.currentSession.messages = [];
+      console.log(chalk.hex('#8B5CF6')('🧹 Histórico da conversa limpo'));
+      console.log('\n');
+    }
+  }
+
+  /**
+   * Mostra status da sessão atual
+   */
+  private showStatus(): void {
+    if (this.currentSession) {
+      console.log('\n');
+      console.log(chalk.hex('#8B5CF6')('┌─ ' + chalk.bold('📊 STATUS DA SESSÃO') + ' ─' + '─'.repeat(40) + '┐'));
+      console.log(chalk.hex('#A78BFA')(`  Modelo: ${this.currentSession.model}`));
+      console.log(chalk.hex('#A78BFA')(`  Sessão: ${this.currentSession.id}`));
+      console.log(chalk.hex('#A78BFA')(`  Início: ${this.currentSession.startTime.toLocaleString()}`));
+      console.log(chalk.hex('#A78BFA')(`  Mensagens: ${this.currentSession.messages.length}`));
+      console.log(chalk.hex('#C4B5FD')('└' + '─'.repeat(62) + '┘'));
+      console.log('\n');
+    }
   }
 }

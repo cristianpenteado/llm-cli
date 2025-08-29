@@ -129,8 +129,6 @@ export class ModelManager {
    * Envia prompt para o modelo via MCP
    */
   async sendPrompt(modelName: string, prompt: string, context?: any): Promise<ModelResponse> {
-    Logger.info(`💬 Enviando prompt para modelo: ${modelName}`);
-    
     try {
       // Garantir que o modelo está pronto
       await this.ensureModelReady(modelName);
@@ -140,14 +138,10 @@ export class ModelManager {
       
       // Tentar usar MCP primeiro
       try {
-        Logger.info('🔌 Tentando conectar via MCP...');
         const response = await this.mcpClient.sendPrompt(modelName, prompt, projectContext);
-        Logger.success(`✅ Resposta recebida do modelo ${modelName} via MCP`);
         return response;
       } catch (mcpError) {
-        Logger.warn('⚠️ MCP falhou, usando Ollama diretamente...');
-        
-        // Fallback para Ollama direto
+        // Fallback para Ollama direto (sem logs desnecessários)
         const ollamaResponse = await this.ollamaManager.generateResponse(modelName, prompt, projectContext);
         
         // Converter resposta do Ollama para formato ModelResponse
@@ -158,7 +152,6 @@ export class ModelManager {
           confidence: 0.8
         };
         
-        Logger.success(`✅ Resposta recebida do modelo ${modelName} via Ollama`);
         return response;
       }
       
