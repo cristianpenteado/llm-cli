@@ -16,6 +16,7 @@ export class OllamaManager {
   private isFirstRun = true; // Adicionado para controlar a primeira execução
   private activeSession: any = null; // Sessão ativa com o modelo
   private backgroundProcess: any = null; // Processo em background
+  private persistentModelProcess: any = null; // Processo persistente do modelo
 
   constructor() {
     // Inicializar cache limpo
@@ -589,31 +590,75 @@ export class OllamaManager {
 
 
   /**
-   * Inicia o modelo em background automaticamente (não-bloqueante)
+   * Inicia o modelo em modo persistente para respostas imediatas
    */
   private startModelInBackgroundAsync(modelName: string): void {
     // Executar em background sem bloquear
     setImmediate(async () => {
       try {
         // Parar processo anterior se existir
-        if (this.backgroundProcess) {
-          this.backgroundProcess.kill('SIGTERM');
-          this.backgroundProcess = null;
+        if (this.persistentModelProcess) {
+          this.persistentModelProcess.kill('SIGTERM');
+          this.persistentModelProcess = null;
         }
 
-        // Iniciar modelo em background sem mostrar output
+        // Iniciar modelo em modo persistente com stdio para comunicação
         const { spawn } = await import('child_process');
         
-        this.backgroundProcess = spawn('ollama', ['run', modelName], {
-          stdio: ['pipe', 'ignore', 'ignore'], // Ignorar stdout e stderr
-          detached: true // Processo independente
+        this.persistentModelProcess = spawn('ollama', ['run', modelName], {
+          stdio: ['pipe', 'pipe', 'pipe'], // Manter stdin/stdout para comunicação
+          detached: false // Processo controlado
         });
 
-        Logger.ollama(`✅ Modelo ${modelName} iniciado em background`);
+        Logger.ollama(`✅ Modelo ${modelName} iniciado em modo persistente`);
         
       } catch (error) {
-        Logger.warn(`Modelo ${modelName} não pôde ser iniciado em background:`, error);
+        Logger.warn(`Modelo ${modelName} não pôde ser iniciado em modo persistente:`, error);
       }
+    });
+  }
+
+  /**
+   * Envia prompt para o processo persistente para resposta imediata
+   */
+  private async sendToPersistentProcess(prompt: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.persistentModelProcess || !this.persistentModelProcess.pid) {
+        reject(new Error('Processo persistente não está disponível'));
+        return;
+      }
+
+      let response = '';
+      let hasResponse = false;
+      
+      // Timeout de 10 segundos para resposta imediata
+      const timeoutId = setTimeout(() => {
+        if (!hasResponse) {
+          reject(new Error('Timeout: resposta demorou mais de 10s'));
+        }
+      }, 10000);
+      
+      // Capturar resposta
+      this.persistentModelProcess.stdout.on('data', (data: Buffer) => {
+        response += data.toString();
+        if (response.trim() && !hasResponse) {
+          hasResponse = true;
+          clearTimeout(timeoutId);
+          resolve(response.trim());
+        }
+      });
+      
+      // Enviar prompt
+      this.persistentModelProcess.stdin.write(prompt + '\n');
+      
+      // Se não houver resposta em 3s, considerar como resposta completa
+      setTimeout(() => {
+        if (!hasResponse) {
+          hasResponse = true;
+          clearTimeout(timeoutId);
+          resolve(response.trim() || 'Resposta vazia do modelo');
+        }
+      }, 3000);
     });
   }
 
@@ -719,7 +764,16 @@ export class OllamaManager {
         fullPrompt = `${context}\n\nPergunta: ${prompt}`;
       }
       
-      // Usar exec diretamente com timeout mais longo para primeira execução
+      // Tentar usar o processo persistente primeiro para resposta imediata
+      if (this.persistentModelProcess && this.persistentModelProcess.pid) {
+        try {
+          return await this.sendToPersistentProcess(fullPrompt);
+        } catch (persistentError) {
+          Logger.warn('Processo persistente falhou, usando fallback...');
+        }
+      }
+      
+      // Fallback: usar exec diretamente
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
