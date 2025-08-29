@@ -231,6 +231,35 @@ export class ConversationManager {
   }
 
   /**
+   * Extrai texto da resposta do modelo (pode ser string ou array de objetos)
+   */
+  private extractResponseText(content: any): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+    
+    if (Array.isArray(content)) {
+      // Se for array, extrair texto de cada item
+      return content.map(item => {
+        if (typeof item === 'string') {
+          return item;
+        }
+        if (item && typeof item === 'object' && item.text) {
+          return item.text;
+        }
+        return '';
+      }).join('\n');
+    }
+    
+    if (content && typeof content === 'object' && content.text) {
+      return content.text;
+    }
+    
+    // Fallback: converter para string
+    return String(content);
+  }
+
+  /**
    * Detecta se a mensagem é uma ação/agente
    */
   private detectActionIntent(message: string): boolean {
@@ -262,11 +291,14 @@ export class ConversationManager {
         this.currentSession!.context
       );
 
+      // Extrair texto da resposta (pode ser string ou array de objetos)
+      const responseText = this.extractResponseText(response.content);
+
       // Mostrar resposta natural
-      this.showResponse(response.content);
+      this.showResponse(responseText);
 
       // Adicionar resposta à sessão
-      this.addMessage('assistant', response.content);
+      this.addMessage('assistant', responseText);
 
       // Processar mudanças se houver
       if (response.changes && response.changes.length > 0) {
@@ -318,8 +350,11 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
       // Processar resposta como ação
       await this.processAgentResponse(response, message);
       
+      // Extrair texto da resposta
+      const responseText = this.extractResponseText(response.content);
+
       // Adicionar resposta à sessão
-      this.addMessage('assistant', response.content);
+      this.addMessage('assistant', responseText);
 
     } catch (error) {
       Logger.error('Erro na ação:', error);
@@ -337,8 +372,11 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
         await this.processModelChanges(response.changes);
       }
       
+      // Extrair texto da resposta
+      const responseText = this.extractResponseText(response.content);
+
       // Mostrar resultado da ação
-      this.showActionResult(response.content);
+      this.showActionResult(responseText);
       
     } catch (error) {
       Logger.error('Erro ao processar resposta do agente:', error);
