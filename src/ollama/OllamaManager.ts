@@ -48,8 +48,14 @@ export class OllamaManager {
         Logger.ollama(`🔍 [LOGS] Inicializando com modelo: ${modelToUse}`);
       }
 
-      // Garantir que o modelo está disponível
-      await this.ensureModelAvailable(modelToUse);
+      // Verificar se o modelo está disponível (sem aguardar download)
+      const availableModels = await this.listModels();
+      const modelExists = availableModels.some(m => m.name === modelToUse);
+      
+      if (!modelExists) {
+        Logger.warn(`⚠️ Modelo ${modelToUse} não encontrado. Inicialização em background pode falhar.`);
+        Logger.info(`💡 Execute "ollama pull ${modelToUse}" para baixar o modelo.`);
+      }
 
       // Parar processo persistente anterior se existir
       if (this.persistentModelProcess) {

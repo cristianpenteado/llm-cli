@@ -137,11 +137,17 @@ export class LLMCLI {
       // Salvar na configuração do projeto
       await this.projectManager.updateProjectModel(this.currentProject.path, modelName);
 
-      // Iniciar novo modelo
-      await this.ollamaManager.initialize(modelName);
+      // Configurar novo modelo (sem aguardar inicialização completa)
+      Logger.info(`🚀 Iniciando modelo ${modelName} em background...`);
+      
+      // Iniciar modelo em background de forma não-bloqueante
+      this.ollamaManager.initialize(modelName).catch((error) => {
+        Logger.warn(`⚠️ Erro ao inicializar modelo em background: ${error}`);
+      });
 
       Logger.success(`✅ Modelo alterado para: ${modelName}`);
       Logger.info(`💡 Use "llm chat" para iniciar uma conversa com o novo modelo`);
+      Logger.info(`🔄 Modelo está sendo inicializado em background...`);
       
     } catch (error) {
       Logger.error('Erro ao trocar modelo:', error);
