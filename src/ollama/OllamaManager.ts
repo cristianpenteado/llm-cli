@@ -78,8 +78,7 @@ export class OllamaManager {
         // Verificar se o erro é de porta em uso (Ollama já está rodando)
         if (startError.stderr && startError.stderr.includes('address already in use')) {
           Logger.ollama('✅ Porta 11434 em uso - Ollama já está rodando em background');
-          // Aguardar um pouco para o servidor estar pronto
-          await this.waitForServerReady();
+          // Não aguardar, continuar direto - o servidor pode demorar para responder
           return;
         }
         
@@ -386,17 +385,40 @@ export class OllamaManager {
    * Garante que o modelo está disponível
    */
   private async ensureModelAvailable(modelName: string): Promise<void> {
-    const models = await this.listModels();
-    const model = models.find(m => m.name === modelName);
-    
-    if (!model) {
-      if (modelName === this.defaultModel) {
-        // Para o modelo padrão, sempre tentar baixar
-        await this.downloadModelWithProgress(modelName);
-      } else {
-        // Para outros modelos, informar que precisa baixar
-        throw new Error(`Modelo ${modelName} não encontrado. Use "ollama pull ${modelName}" para baixá-lo.`);
+    try {
+      // Tentar listar modelos com retry
+      let models: ModelConfig[] = [];
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (attempts < maxAttempts) {
+        try {
+          models = await this.listModels();
+          break;
+        } catch (error) {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            throw new Error(`Não foi possível conectar ao servidor Ollama após ${maxAttempts} tentativas`);
+          }
+          // Aguardar um pouco antes de tentar novamente
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
       }
+      
+      const model = models.find(m => m.name === modelName);
+      
+      if (!model) {
+        if (modelName === this.defaultModel) {
+          // Para o modelo padrão, sempre tentar baixar
+          await this.downloadModelWithProgress(modelName);
+        } else {
+          // Para outros modelos, informar que precisa baixar
+          throw new Error(`Modelo ${modelName} não encontrado. Use "ollama pull ${modelName}" para baixá-lo.`);
+        }
+      }
+    } catch (error) {
+      Logger.error(`Erro ao verificar modelo ${modelName}:`, error);
+      throw error;
     }
   }
 
