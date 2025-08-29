@@ -104,8 +104,8 @@ export class OllamaManager {
     
     while (attempts < maxAttempts) {
       try {
-        const { stdout } = await execAsync('ollama list --json');
-        if (stdout) {
+        const { stdout } = await execAsync('ollama list');
+        if (stdout && stdout.trim()) {
           return;
         }
       } catch (error) {
@@ -452,22 +452,14 @@ export class OllamaManager {
     try {
       Logger.ollama('📋 Listando modelos disponíveis...');
       
-      const { stdout } = await execAsync('ollama list --json', {
+      // Usar comando sem --json para compatibilidade com versões antigas
+      const { stdout } = await execAsync('ollama list', {
         timeout: 5000, // 5s timeout para listar modelos
         maxBuffer: 1024 * 1024
       });
 
-      const rawModels = JSON.parse(stdout);
-      const models: ModelConfig[] = rawModels.map((model: any) => ({
-        name: model.name,
-        description: `Modelo Ollama: ${model.name}`,
-        size: this.formatModelSize(model.size || 0),
-        compatibility: 'Ollama',
-        parameters: model.parameter_size || 0,
-        contextLength: model.context_length || 0,
-        isLocal: true,
-        status: 'ready'
-      }));
+      // Parsear saída do comando ollama list
+      const models: ModelConfig[] = this.parseOllamaListOutput(stdout);
       
       // Cache dos modelos
       this.modelCache.set('all', models);
@@ -478,6 +470,50 @@ export class OllamaManager {
       
     } catch (error) {
       Logger.error('Erro ao listar modelos:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Parseia a saída do comando ollama list
+   */
+  private parseOllamaListOutput(output: string): ModelConfig[] {
+    try {
+      const lines = output.trim().split('\n');
+      const models: ModelConfig[] = [];
+      
+      // Pular cabeçalho se existir
+      const startIndex = lines[0].includes('NAME') ? 1 : 0;
+      
+      for (let i = startIndex; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        // Parsear linha do formato: NAME                TAG                 SIZE       ID
+        // Exemplo: phi3:mini         latest            3.8 GB     a1b2c3d4
+        const parts = line.split(/\s+/);
+        if (parts.length >= 3) {
+          const name = parts[0];
+          const tag = parts[1];
+          const size = parts.slice(2, -1).join(' '); // Tamanho pode ter espaços
+          const id = parts[parts.length - 1];
+          
+          models.push({
+            name: name,
+            description: `Modelo Ollama: ${name}:${tag}`,
+            size: size,
+            compatibility: 'Ollama',
+            parameters: 0, // Não disponível na versão antiga
+            contextLength: 0, // Não disponível na versão antiga
+            isLocal: true,
+            status: 'ready'
+          });
+        }
+      }
+      
+      return models;
+    } catch (error) {
+      Logger.warn('Erro ao parsear saída do ollama list, retornando lista vazia');
       return [];
     }
   }
