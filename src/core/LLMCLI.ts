@@ -325,9 +325,6 @@ export class LLMCLI {
   async startChat(specificModel?: string): Promise<void> {
     Logger.info('💬 Iniciando modo conversacional...');
     
-    // Inicializar OllamaManager (baixa modelo padrão automaticamente)
-    await this.ollamaManager.initialize();
-    
     // Verificar se o projeto está inicializado
     if (!this.currentProject) {
       const projectPath = process.cwd();
@@ -400,7 +397,7 @@ export class LLMCLI {
       await this.projectManager.updateProjectModel(this.currentProject.path, modelToUse);
     }
 
-    // Inicializar modelo
+    // Inicializar modelo (sem duplicar inicialização)
     await this.ollamaManager.initialize(modelToUse);
     
     Logger.success(`🤖 Conectado ao modelo: ${modelToUse}`);

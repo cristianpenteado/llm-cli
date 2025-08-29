@@ -679,7 +679,9 @@ export class OllamaManager {
 
         // Log de sucesso imediato (sem aguardar)
         Logger.ollama(`✅ Modelo ${modelName} iniciado em modo persistente (PID: ${child.pid})`);
-        Logger.ollama(`📝 Logs disponíveis em: ${logFile}`);
+        if (this.verboseLogs) {
+          Logger.ollama(`📝 Logs disponíveis em: ${logFile}`);
+        }
         
       } catch (error) {
         if (this.verboseLogs) {
