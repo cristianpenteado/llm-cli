@@ -202,8 +202,13 @@ export class LLMCLI {
       modelToUse = await this.configManager.getDefaultModel();
     }
     
+    // Se ainda não houver modelo, usar phi3:mini como padrão
     if (!modelToUse) {
-      throw new Error('Nenhum modelo configurado. Use "llm set-default-model <model>" ou "llm init" primeiro.');
+      modelToUse = 'phi3:mini';
+      Logger.info(`🤖 Usando modelo padrão: ${modelToUse}`);
+      
+      // Definir como modelo padrão global
+      await this.configManager.setDefaultModel(modelToUse);
     }
 
     // Inicializar modelo se necessário

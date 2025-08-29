@@ -133,16 +133,23 @@ export class ModelManager {
       // Garantir que o modelo está pronto
       await this.ensureModelReady(modelName);
       
-      // Preparar contexto do projeto
-      const projectContext = context ? await this.prepareProjectContext(context) : '';
+      // Detectar se é uma conversa simples ou ação complexa
+      const isSimpleConversation = this.isSimpleConversation(prompt);
+      
+      // Preparar contexto do projeto apenas se necessário
+      let projectContext = '';
+      if (!isSimpleConversation && context) {
+        projectContext = await this.prepareProjectContext(context);
+      }
       
       // Tentar usar MCP primeiro
       try {
         const response = await this.mcpClient.sendPrompt(modelName, prompt, projectContext);
         return response;
       } catch (mcpError) {
-        // Fallback para Ollama direto (sem logs desnecessários)
-        const ollamaResponse = await this.ollamaManager.generateResponse(modelName, prompt, projectContext);
+        // Fallback para Ollama direto com prompt simplificado
+        const finalPrompt = isSimpleConversation ? prompt : `${prompt}\n\n${projectContext}`;
+        const ollamaResponse = await this.ollamaManager.generateResponse(modelName, finalPrompt, '');
         
         // Converter resposta do Ollama para formato ModelResponse
         const response: ModelResponse = {
@@ -159,6 +166,24 @@ export class ModelManager {
       Logger.error('Erro ao enviar prompt para o modelo:', error);
       throw error;
     }
+  }
+
+  /**
+   * Detecta se é uma conversa simples
+   */
+  private isSimpleConversation(prompt: string): boolean {
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // Palavras-chave que indicam conversa simples
+    const simpleKeywords = [
+      'olá', 'oi', 'bom dia', 'boa tarde', 'boa noite',
+      'como você está', 'tudo bem', 'beleza', 'valeu',
+      'obrigado', 'obrigada', 'obg', 'thanks', 'thank you',
+      'o que é', 'como funciona', 'explique', 'descreva',
+      'ajuda', 'ajude', 'pode me ajudar'
+    ];
+    
+    return simpleKeywords.some(keyword => lowerPrompt.includes(keyword));
   }
 
   /**

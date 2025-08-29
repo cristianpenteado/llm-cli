@@ -437,7 +437,13 @@ export class OllamaManager {
    * Chama Ollama com otimizações
    */
   private async callOllama(modelName: string, prompt: string, context?: string): Promise<string> {
-    const fullPrompt = context ? `${context}\n\nPergunta: ${prompt}` : prompt;
+    // Para conversas simples, usar apenas o prompt
+    let fullPrompt = prompt;
+    
+    // Adicionar contexto apenas se for necessário e não for conversa simples
+    if (context && context.trim() && !this.isSimplePrompt(prompt)) {
+      fullPrompt = `${context}\n\nPergunta: ${prompt}`;
+    }
     
     const command = `ollama run ${modelName} "${fullPrompt.replace(/"/g, '\\"')}"`;
     
@@ -447,6 +453,24 @@ export class OllamaManager {
     });
 
     return stdout.trim();
+  }
+
+  /**
+   * Verifica se é um prompt simples (conversa)
+   */
+  private isSimplePrompt(prompt: string): boolean {
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // Palavras-chave que indicam conversa simples
+    const simpleKeywords = [
+      'olá', 'oi', 'bom dia', 'boa tarde', 'boa noite',
+      'como você está', 'tudo bem', 'beleza', 'valeu',
+      'obrigado', 'obrigada', 'obg', 'thanks', 'thank you',
+      'o que é', 'como funciona', 'explique', 'descreva',
+      'ajuda', 'ajude', 'pode me ajudar'
+    ];
+    
+    return simpleKeywords.some(keyword => lowerPrompt.includes(keyword));
   }
 
   /**
