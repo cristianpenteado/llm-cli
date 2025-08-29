@@ -213,14 +213,59 @@ export class ConversationManager {
     this.addMessage('user', message);
 
     try {
-      // Enviar para o modelo
+      // Detectar se é uma ação ou conversa
+      const isAction = this.detectActionIntent(message);
+      
+      if (isAction) {
+        // Modo agente - executar ação
+        await this.handleAsAgent(message);
+      } else {
+        // Modo conversa - resposta direta
+        await this.handleAsConversation(message);
+      }
+
+    } catch (error) {
+      Logger.error('Erro ao processar mensagem:', error);
+      this.addMessage('assistant', 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.');
+    }
+  }
+
+  /**
+   * Detecta se a mensagem é uma ação/agente
+   */
+  private detectActionIntent(message: string): boolean {
+    const lowerMessage = message.toLowerCase();
+    
+    // Palavras-chave que indicam ação
+    const actionKeywords = [
+      'criar', 'crie', 'faça', 'implemente', 'modifique', 'altere', 'adicione', 'remova',
+      'delete', 'edite', 'escreva', 'gere', 'construa', 'desenvolva', 'programe',
+      'arquivo', 'função', 'classe', 'método', 'teste', 'config', 'setup', 'instale',
+      'adicione', 'remova', 'atualize', 'corrija', 'otimize', 'refatore', 'mova', 'renomeie'
+    ];
+    
+    return actionKeywords.some(keyword => lowerMessage.includes(keyword));
+  }
+
+  /**
+   * Processa mensagem como conversa normal
+   */
+  private async handleAsConversation(message: string): Promise<void> {
+    try {
+      // Mostrar indicador de processamento
+      this.showProcessingIndicator();
+      
+      // Enviar para o modelo via MCP (internamente)
       const response = await this.modelManager.sendPrompt(
-        this.currentSession.model,
+        this.currentSession!.model,
         message,
-        this.currentSession.context
+        this.currentSession!.context
       );
 
-      // Adicionar resposta do modelo
+      // Mostrar resposta natural
+      this.showResponse(response.content);
+
+      // Adicionar resposta à sessão
       this.addMessage('assistant', response.content);
 
       // Processar mudanças se houver
@@ -230,15 +275,74 @@ export class ConversationManager {
 
       // Mostrar sugestões se houver
       if (response.suggestions && response.suggestions.length > 0) {
-        Logger.info('💡 Sugestões:');
-        response.suggestions.forEach((suggestion, index) => {
-          Logger.info(`  ${index + 1}. ${suggestion}`);
-        });
+        this.showSuggestions(response.suggestions);
       }
 
     } catch (error) {
-      Logger.error('Erro ao processar mensagem:', error);
-      this.addMessage('assistant', 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.');
+      Logger.error('Erro na conversa:', error);
+      this.showErrorResponse();
+    }
+  }
+
+  /**
+   * Processa mensagem como ação/agente
+   */
+  private async handleAsAgent(message: string): Promise<void> {
+    try {
+      // Mostrar modo agente
+      this.showAgentMode(message);
+      
+      // Preparar prompt para ação
+      const actionPrompt = `Você é um assistente de programação inteligente. 
+
+INSTRUÇÕES:
+- Analise a solicitação do usuário: "${message}"
+- Identifique o que precisa ser feito
+- Execute a ação solicitada
+- Forneça explicação clara do que foi feito
+- Se for criação/modificação de código, implemente diretamente
+- Se for configuração, execute os comandos necessários
+
+Aja como um agente inteligente e execute a tarefa solicitada.`;
+
+      // Enviar para o modelo com contexto de agente
+      const response = await this.modelManager.sendPrompt(
+        this.currentSession!.model,
+        actionPrompt,
+        this.currentSession!.context
+      );
+
+      // Mostrar execução da ação
+      this.showExecutingAction();
+      
+      // Processar resposta como ação
+      await this.processAgentResponse(response, message);
+      
+      // Adicionar resposta à sessão
+      this.addMessage('assistant', response.content);
+
+    } catch (error) {
+      Logger.error('Erro na ação:', error);
+      this.showErrorResponse();
+    }
+  }
+
+  /**
+   * Processa resposta do agente
+   */
+  private async processAgentResponse(response: any, originalMessage: string): Promise<void> {
+    try {
+      // Extrair ações da resposta (se houver)
+      if (response.changes && response.changes.length > 0) {
+        await this.processModelChanges(response.changes);
+      }
+      
+      // Mostrar resultado da ação
+      this.showActionResult(response.content);
+      
+    } catch (error) {
+      Logger.error('Erro ao processar resposta do agente:', error);
+      this.showErrorResponse();
     }
   }
 
@@ -665,4 +769,35 @@ export class ConversationManager {
       console.log('\n');
     }
   }
+
+  /**
+   * Mostra modo agente
+   */
+  private showAgentMode(message: string): void {
+    const agentBanner = chalk.blue.bold('🤖 MODO AGENTE ATIVADO');
+    const action = chalk.yellow(`Executando: ${message}`);
+    
+    console.log('\n' + '='.repeat(50));
+    console.log(agentBanner);
+    console.log(action);
+    console.log('='.repeat(50) + '\n');
+  }
+
+  /**
+   * Mostra que está executando ação
+   */
+  private showExecutingAction(): void {
+    console.log(chalk.blue('⚡ Executando ação...'));
+  }
+
+  /**
+   * Mostra resultado da ação
+   */
+  private showActionResult(content: string): void {
+    console.log(chalk.green('✅ Ação executada com sucesso!'));
+    console.log(chalk.cyan('📋 Resultado:'));
+    console.log(content);
+    console.log('\n' + '─'.repeat(50) + '\n');
+  }
 }
+
