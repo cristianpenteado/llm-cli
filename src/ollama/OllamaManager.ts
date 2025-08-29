@@ -446,8 +446,6 @@ export class OllamaManager {
       fullPrompt = `${context}\n\nPergunta: ${prompt}`;
     }
     
-    Logger.ollama(`🤖 Enviando prompt para ${modelName}...`);
-    
     // Usar spawn para melhor controle do processo
     const { spawn } = await import('child_process');
     
@@ -519,8 +517,6 @@ export class OllamaManager {
     }
 
     try {
-      Logger.ollama('📋 Listando modelos disponíveis...');
-      
       // Usar comando sem --json para compatibilidade com versões antigas
       const { stdout } = await execAsync('ollama list', {
         timeout: 5000, // 5s timeout para listar modelos
@@ -534,7 +530,6 @@ export class OllamaManager {
       this.modelCache.set('all', models);
       this.lastModelList = now;
       
-      Logger.ollama(`✅ ${models.length} modelos encontrados`);
       return models;
       
     } catch (error) {
@@ -597,8 +592,6 @@ export class OllamaManager {
         await this.stopModelSession();
       }
 
-      Logger.ollama(`🚀 Iniciando sessão contínua com ${modelName}...`);
-      
       // Iniciar processo ollama run em modo contínuo
       const { spawn } = await import('child_process');
       
@@ -615,8 +608,6 @@ export class OllamaManager {
       // Aguardar o modelo estar pronto
       await this.waitForSessionReady();
       
-      Logger.ollama(`✅ Sessão contínua iniciada com ${modelName}`);
-      
     } catch (error) {
       Logger.error(`Erro ao iniciar sessão com ${modelName}:`, error);
       throw error;
@@ -631,7 +622,6 @@ export class OllamaManager {
       try {
         this.activeSession.process.kill('SIGTERM');
         this.activeSession = null;
-        Logger.ollama('🛑 Sessão do modelo parada');
       } catch (error) {
         Logger.warn('Erro ao parar sessão do modelo:', error);
       }

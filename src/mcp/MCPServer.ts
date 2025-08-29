@@ -101,7 +101,6 @@ export class MCPServer {
 
   async getModelInfo(modelName: string): Promise<any> {
     try {
-      Logger.mcp(`ℹ️ Obtendo informações do modelo: ${modelName}`);
       const models = await this.ollamaManager.listModels();
       const model = models.find(m => m.name === modelName);
       if (!model) {

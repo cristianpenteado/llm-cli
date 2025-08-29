@@ -13,6 +13,7 @@ export class ConversationManager {
   private currentSession: ChatSession | null = null;
   private commands: Map<string, ChatCommand> = new Map();
   private projectContext: ProjectContext | null = null;
+  private processingInterval: NodeJS.Timeout | null = null;
 
   constructor(modelManager: ModelManager) {
     this.modelManager = modelManager;
@@ -294,6 +295,9 @@ export class ConversationManager {
       // Extrair texto da resposta (pode ser string ou array de objetos)
       const responseText = this.extractResponseText(response.content);
 
+      // Parar indicador de processamento
+      this.stopProcessingIndicator();
+
       // Mostrar resposta natural
       this.showResponse(responseText);
 
@@ -343,6 +347,9 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
         actionPrompt,
         this.currentSession!.context
       );
+
+      // Parar indicador de processamento
+      this.stopProcessingIndicator();
 
       // Mostrar execução da ação
       this.showExecutingAction();
@@ -705,7 +712,27 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
    * Mostra indicador de processamento
    */
   private showProcessingIndicator(): void {
-    console.log(chalk.hex('#8B5CF6')('🔄 Processando...'));
+    process.stdout.write(chalk.hex('#8B5CF6')('🔄 Processando'));
+    
+    // Animar o indicador
+    const dots = ['.', '..', '...'];
+    let dotIndex = 0;
+    
+    this.processingInterval = setInterval(() => {
+      process.stdout.write('\r' + chalk.hex('#8B5CF6')('🔄 Processando' + dots[dotIndex]));
+      dotIndex = (dotIndex + 1) % dots.length;
+    }, 500);
+  }
+
+  /**
+   * Para o indicador de processamento
+   */
+  private stopProcessingIndicator(): void {
+    if (this.processingInterval) {
+      clearInterval(this.processingInterval);
+      this.processingInterval = null;
+      process.stdout.write('\r' + ' '.repeat(50) + '\r'); // Limpar linha
+    }
   }
 
   /**
