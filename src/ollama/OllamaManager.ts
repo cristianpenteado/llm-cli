@@ -596,42 +596,20 @@ export class OllamaManager {
     try {
       Logger.ollama(`🔄 Pré-carregando modelo ${modelName}...`);
       
-      // Usar spawn para pré-carregar com timeout mais longo
-      const { spawn } = await import('child_process');
+      // Usar exec para pré-carregar com timeout mais longo
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
       
-      return new Promise((resolve, reject) => {
-        const preloadProcess = spawn('ollama', ['run', modelName, 'test']);
-        
-        let hasStarted = false;
-        
-        // Aguardar o modelo começar a responder
-        preloadProcess.stdout.on('data', () => {
-          if (!hasStarted) {
-            hasStarted = true;
-            preloadProcess.kill('SIGTERM');
-            resolve();
-          }
-        });
-        
-        // Timeout de 2 minutos para pré-carregamento
-        setTimeout(() => {
-          if (!hasStarted) {
-            preloadProcess.kill('SIGTERM');
-            resolve(); // Resolver mesmo com timeout para não bloquear
-          }
-        }, 120000);
-        
-        // Se o processo terminar antes, resolver
-        preloadProcess.on('close', () => {
-          if (!hasStarted) {
-            resolve();
-          }
-        });
-        
-        preloadProcess.on('error', () => {
-          resolve(); // Não falhar se pré-carregamento falhar
-        });
+      const command = `ollama run ${modelName} "test"`;
+      
+      // Timeout de 3 minutos para pré-carregamento
+      await execAsync(command, {
+        timeout: 180000, // 3 minutos
+        maxBuffer: 1024 * 1024
       });
+      
+      Logger.ollama(`✅ Modelo ${modelName} pré-carregado com sucesso`);
       
     } catch (error) {
       Logger.warn(`Pré-carregamento do modelo ${modelName} falhou:`, error);
@@ -768,57 +746,25 @@ export class OllamaManager {
         fullPrompt = `${context}\n\nPergunta: ${prompt}`;
       }
       
-      // Usar spawn para melhor controle do processo
-      const { spawn } = await import('child_process');
+      // Usar exec diretamente com timeout mais longo para primeira execução
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
       
-      return new Promise((resolve, reject) => {
-        const ollamaProcess = spawn('ollama', ['run', this.activeSession.modelName, fullPrompt]);
-        
-        let stdout = '';
-        let stderr = '';
-        let hasResponse = false;
-        
-        // Capturar stdout
-        ollamaProcess.stdout.on('data', (data: Buffer) => {
-          stdout += data.toString();
-          if (stdout.trim() && !hasResponse) {
-            hasResponse = true;
-            ollamaProcess.kill('SIGTERM');
-            resolve(stdout.trim());
-          }
-        });
-        
-        // Capturar stderr
-        ollamaProcess.stderr.on('data', (data: Buffer) => {
-          stderr += data.toString();
-        });
-        
-        // Processo finalizado
-        ollamaProcess.on('close', (code) => {
-          if (!hasResponse) {
-            if (code === 0 && stdout.trim()) {
-              resolve(stdout.trim());
-            } else {
-              reject(new Error(`Processo finalizado com código ${code}. Stderr: ${stderr}`));
-            }
-          }
-        });
-        
-        // Erro no processo
-        ollamaProcess.on('error', (error) => {
-          if (!hasResponse) {
-            reject(error);
-          }
-        });
-        
-        // Timeout de 60 segundos
-        setTimeout(() => {
-          if (!hasResponse) {
-            ollamaProcess.kill('SIGTERM');
-            reject(new Error('Timeout: resposta demorou mais de 60s'));
-          }
-        }, 60000);
+      const command = `ollama run ${this.activeSession.modelName} "${fullPrompt.replace(/"/g, '\\"')}"`;
+      
+      // Timeout progressivo: 120s para primeira execução, 60s para subsequentes
+      const timeout = this.isFirstRun ? 120000 : 60000;
+      
+      const { stdout } = await execAsync(command, {
+        timeout: timeout,
+        maxBuffer: 1024 * 1024 // 1MB buffer
       });
+
+      // Marcar que não é mais a primeira execução
+      this.isFirstRun = false;
+
+      return stdout.trim();
     } catch (error) {
       Logger.error(`Erro ao enviar prompt para ${this.activeSession.modelName}:`, error);
       throw error;
