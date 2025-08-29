@@ -17,14 +17,16 @@ export class LLMCLI {
   private ollamaManager: OllamaManager;
   private configManager: ConfigManager;
   private currentProject: ProjectConfig | null = null;
+  private verboseLogs: boolean;
 
-  constructor() {
+  constructor(verboseLogs: boolean = false) {
+    this.verboseLogs = verboseLogs;
     this.configManager = new ConfigManager();
-    this.ollamaManager = new OllamaManager();
-    this.mcpClient = new MCPClient(this.ollamaManager);
+    this.ollamaManager = new OllamaManager(verboseLogs);
+    this.mcpClient = new MCPClient(this.ollamaManager, verboseLogs);
     this.projectManager = new ProjectManager();
-    this.modelManager = new ModelManager(this.ollamaManager, this.mcpClient);
-    this.conversationManager = new ConversationManager(this.modelManager);
+    this.modelManager = new ModelManager(this.ollamaManager, this.mcpClient, verboseLogs);
+    this.conversationManager = new ConversationManager(this.modelManager, verboseLogs);
     this.fileManager = new FileManager();
   }
 

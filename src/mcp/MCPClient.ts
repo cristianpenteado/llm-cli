@@ -11,11 +11,11 @@ export class MCPClient {
   private ollamaManager: OllamaManager;
   private isConnected: boolean = false;
 
-  constructor(ollamaManager: OllamaManager) {
+  constructor(ollamaManager: OllamaManager, verboseLogs: boolean = false) {
     this.configManager = new ConfigManager();
     this.config = this.configManager.getMCPConfig();
     this.ollamaManager = ollamaManager;
-    this.mcpServer = new MCPServer(ollamaManager);
+    this.mcpServer = new MCPServer(ollamaManager, verboseLogs);
   }
 
   /**

@@ -17,8 +17,10 @@ export class OllamaManager {
   private activeSession: any = null; // Sessão ativa com o modelo
   private backgroundProcess: any = null; // Processo em background
   private persistentModelProcess: any = null; // Processo persistente do modelo
+  private verboseLogs: boolean;
 
-  constructor() {
+  constructor(verboseLogs: boolean = false) {
+    this.verboseLogs = verboseLogs;
     // Inicializar cache limpo
   }
 
@@ -622,33 +624,57 @@ export class OllamaManager {
    * Envia prompt para o processo persistente para resposta imediata
    */
   private async sendToPersistentProcess(prompt: string): Promise<string> {
+    if (this.verboseLogs) {
+      Logger.ollama(`🔍 [LOGS] Enviando prompt para processo persistente: "${prompt}"`);
+      Logger.ollama(`🔍 [LOGS] Processo PID: ${this.persistentModelProcess?.pid}`);
+    }
+
     return new Promise((resolve, reject) => {
       if (!this.persistentModelProcess || !this.persistentModelProcess.pid) {
-        reject(new Error('Processo persistente não está disponível'));
+        const error = 'Processo persistente não está disponível';
+        if (this.verboseLogs) Logger.ollama(`❌ [LOGS] ${error}`);
+        reject(new Error(error));
         return;
       }
 
       let response = '';
       let hasResponse = false;
       
+      if (this.verboseLogs) {
+        Logger.ollama(`🔍 [LOGS] Configurando listeners para stdout e stdin`);
+      }
+      
       // Timeout de 10 segundos para resposta imediata
       const timeoutId = setTimeout(() => {
         if (!hasResponse) {
-          reject(new Error('Timeout: resposta demorou mais de 10s'));
+          const error = 'Timeout: resposta demorou mais de 10s';
+          if (this.verboseLogs) Logger.ollama(`⏰ [LOGS] ${error}`);
+          reject(new Error(error));
         }
       }, 10000);
       
       // Capturar resposta
       this.persistentModelProcess.stdout.on('data', (data: Buffer) => {
-        response += data.toString();
+        const dataStr = data.toString();
+        response += dataStr;
+        if (this.verboseLogs) {
+          Logger.ollama(`📥 [LOGS] Recebido stdout: "${dataStr}"`);
+          Logger.ollama(`📥 [LOGS] Resposta acumulada: "${response}"`);
+        }
         if (response.trim() && !hasResponse) {
           hasResponse = true;
           clearTimeout(timeoutId);
+          if (this.verboseLogs) {
+            Logger.ollama(`✅ [LOGS] Resposta completa recebida: "${response.trim()}"`);
+          }
           resolve(response.trim());
         }
       });
       
       // Enviar prompt
+      if (this.verboseLogs) {
+        Logger.ollama(`📤 [LOGS] Enviando prompt via stdin: "${prompt}"`);
+      }
       this.persistentModelProcess.stdin.write(prompt + '\n');
       
       // Se não houver resposta em 3s, considerar como resposta completa
@@ -656,6 +682,9 @@ export class OllamaManager {
         if (!hasResponse) {
           hasResponse = true;
           clearTimeout(timeoutId);
+          if (this.verboseLogs) {
+            Logger.ollama(`⚠️ [LOGS] Timeout de 3s atingido, resposta: "${response.trim() || 'vazia'}"`);
+          }
           resolve(response.trim() || 'Resposta vazia do modelo');
         }
       }, 3000);

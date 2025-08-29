@@ -14,10 +14,15 @@ export class ConversationManager {
   private commands: Map<string, ChatCommand> = new Map();
   private projectContext: ProjectContext | null = null;
   private processingInterval: NodeJS.Timeout | null = null;
+  private verboseLogs: boolean;
 
-  constructor(modelManager: ModelManager) {
+  constructor(modelManager: ModelManager, verboseLogs: boolean = false) {
     this.modelManager = modelManager;
+    this.verboseLogs = verboseLogs;
     this.initializeCommands();
+    if (verboseLogs) {
+      Logger.info('🔍 [LOGS] ConversationManager inicializado com logs verbosos');
+    }
   }
 
   /**

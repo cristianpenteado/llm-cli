@@ -6,9 +6,11 @@ export class MCPServer {
   private isRunning: boolean = false;
   private responseCache = new Map<string, { response: any; timestamp: number; ttl: number }>();
   private readonly CACHE_TTL = 30000; // 30 segundos
+  private verboseLogs: boolean;
 
-  constructor(ollamaManager: OllamaManager) {
+  constructor(ollamaManager: OllamaManager, verboseLogs: boolean = false) {
     this.ollamaManager = ollamaManager;
+    this.verboseLogs = verboseLogs;
   }
 
   async start(): Promise<void> {
@@ -40,13 +42,26 @@ export class MCPServer {
   }
 
   async processChatRequest(modelName: string, prompt: string, context?: string): Promise<any> {
+    if (this.verboseLogs) {
+      Logger.mcp(`🔍 [MCP] Processando chat request para modelo: ${modelName}`);
+      Logger.mcp(`🔍 [MCP] Prompt: "${prompt}"`);
+      Logger.mcp(`🔍 [MCP] Contexto: "${context || 'nenhum'}"`);
+    }
+
     try {
       // Verificar cache primeiro
       const cacheKey = `${modelName}:${this.hashString(prompt + (context || ''))}`;
       const cached = this.responseCache.get(cacheKey);
       
       if (cached && Date.now() - cached.timestamp < cached.ttl) {
+        if (this.verboseLogs) {
+          Logger.mcp(`✅ [MCP] Resposta encontrada no cache`);
+        }
         return cached.response;
+      }
+
+      if (this.verboseLogs) {
+        Logger.mcp(`🔄 [MCP] Chamando OllamaManager.generateResponse`);
       }
 
       // Processar em paralelo para melhor performance
@@ -54,6 +69,10 @@ export class MCPServer {
         this.ollamaManager.generateResponse(modelName, prompt, context),
         this.cleanExpiredCache() // Limpar cache em background
       ]);
+
+      if (this.verboseLogs) {
+        Logger.mcp(`📥 [MCP] Resposta do Ollama: "${ollamaResponse.response}"`);
+      }
 
       const response = {
         content: [
@@ -74,8 +93,15 @@ export class MCPServer {
         ttl: this.CACHE_TTL
       });
 
+      if (this.verboseLogs) {
+        Logger.mcp(`✅ [MCP] Resposta processada e cacheada`);
+      }
+
       return response;
     } catch (error) {
+      if (this.verboseLogs) {
+        Logger.mcp(`❌ [MCP] Erro no processamento: ${error}`);
+      }
       Logger.error('Erro no processamento de chat:', error);
       throw error;
     }

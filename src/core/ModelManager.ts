@@ -13,10 +13,13 @@ export class ModelManager {
   private activeModels: Map<string, ModelConfig> = new Map();
   private projectModels: Map<string, string> = new Map();
 
-  constructor(ollamaManager: OllamaManager, mcpClient: MCPClient) {
+  constructor(ollamaManager: OllamaManager, mcpClient: MCPClient, verboseLogs: boolean = false) {
     this.ollamaManager = ollamaManager;
     this.mcpClient = mcpClient;
     this.configManager = new ConfigManager();
+    if (verboseLogs) {
+      Logger.info('🔍 [LOGS] ModelManager inicializado com logs verbosos');
+    }
   }
 
   /**

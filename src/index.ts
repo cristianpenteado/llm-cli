@@ -20,22 +20,28 @@ Banner.show();
 program
   .name('llm')
   .description('CLI inteligente para desenvolvimento com modelos LLMs locais')
-  .version('1.0.0');
+  .version('1.0.0')
+  .option('--logs', 'Mostrar logs detalhados de todas as operações');
 
-// Comando para inicializar um novo projeto
+// Comando para inicializar projeto
 program
   .command('init')
-  .description('Inicializar um novo projeto na pasta atual')
-  .option('-m, --model <model>', 'Modelo LLM específico para este projeto')
-  .option('-f, --force', 'Forçar inicialização mesmo se já existir')
+  .description('Inicializa um novo projeto LLM')
+  .option('-m, --model <model>', 'Modelo específico para usar')
+  .option('-f, --force', 'Forçar inicialização mesmo se projeto existir')
   .action(async (options) => {
-    try {
-      const cli = new LLMCLI();
-      await cli.initializeProject(options);
-    } catch (error) {
-      Logger.error('Erro ao inicializar projeto:', error);
-      process.exit(1);
-    }
+    const cli = new LLMCLI(program.opts().logs);
+    await cli.initializeProject(options);
+  });
+
+// Comando para iniciar chat
+program
+  .command('chat')
+  .description('Inicia modo conversacional com IA')
+  .option('-m, --model <model>', 'Modelo específico para usar')
+  .action(async (options) => {
+    const cli = new LLMCLI(program.opts().logs);
+    await cli.startChat(options.model);
   });
 
 // Comando para trocar modelo durante o uso
@@ -78,21 +84,6 @@ program
       await cli.listModels();
     } catch (error) {
       Logger.error('Erro ao listar modelos:', error);
-      process.exit(1);
-    }
-  });
-
-// Comando para modo conversacional
-program
-  .command('chat')
-  .description('Iniciar modo conversacional com o modelo LLM')
-  .option('-m, --model <model>', 'Modelo específico para esta sessão')
-  .action(async (options) => {
-    try {
-      const cli = new LLMCLI();
-      await cli.startChat(options.model);
-    } catch (error) {
-      Logger.error('Erro ao iniciar chat:', error);
       process.exit(1);
     }
   });
