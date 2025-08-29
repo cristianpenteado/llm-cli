@@ -90,26 +90,63 @@ export class LLMCLI {
    * Troca o modelo LLM para o projeto atual
    */
   async changeModel(modelName?: string): Promise<void> {
-    if (!this.currentProject) {
-      throw new Error('Nenhum projeto ativo. Execute "llm init" primeiro.');
+    try {
+      // Verificar se há um projeto ativo
+      if (!this.currentProject) {
+        // Tentar carregar projeto da pasta atual
+        const currentPath = process.cwd();
+        const projectConfig = await this.projectManager.loadProject(currentPath);
+        
+        if (projectConfig) {
+          this.currentProject = projectConfig;
+          Logger.info(`📁 Projeto carregado: ${projectConfig.name}`);
+        } else {
+          throw new Error('Nenhum projeto ativo. Execute "llm init" primeiro.');
+        }
+      }
+
+      if (!modelName) {
+        // Usar seleção interativa
+        Logger.info('🔄 Vamos escolher um novo modelo para o projeto!');
+        modelName = await this.modelManager.selectModel();
+      }
+
+      Logger.info(`🔄 Alterando modelo para: ${modelName}`);
+
+      // Verificar se o modelo está disponível
+      const availableModels = await this.ollamaManager.listModels();
+      const modelExists = availableModels.some(m => m.name === modelName);
+
+      if (!modelExists) {
+        Logger.warn(`⚠️ Modelo "${modelName}" não encontrado. Tentando baixar...`);
+        try {
+          await this.ollamaManager.downloadModelWithProgress(modelName);
+          Logger.success(`✅ Modelo ${modelName} baixado com sucesso!`);
+        } catch (downloadError) {
+          throw new Error(`Modelo "${modelName}" não encontrado e não pôde ser baixado. Use "ollama pull ${modelName}" manualmente.`);
+        }
+      }
+
+      // Parar processo persistente anterior
+      await this.ollamaManager.stopModelSession();
+
+      // Configurar novo modelo
+      await this.modelManager.setProjectModel(this.currentProject.path, modelName);
+      this.currentProject.model = modelName;
+
+      // Salvar na configuração do projeto
+      await this.projectManager.updateProjectModel(this.currentProject.path, modelName);
+
+      // Iniciar novo modelo
+      await this.ollamaManager.initialize();
+
+      Logger.success(`✅ Modelo alterado para: ${modelName}`);
+      Logger.info(`💡 Use "llm chat" para iniciar uma conversa com o novo modelo`);
+      
+    } catch (error) {
+      Logger.error('Erro ao trocar modelo:', error);
+      throw error;
     }
-
-    if (!modelName) {
-      // Usar seleção interativa
-      Logger.info('🔄 Vamos escolher um novo modelo para o projeto!');
-      modelName = await this.modelManager.selectModel();
-    }
-
-    Logger.info(`🔄 Trocando modelo para: ${modelName}`);
-    
-    // Verificar se o modelo está disponível e baixar se necessário
-    modelName = await this.modelManager.ensureModelReady(modelName);
-
-    // Atualizar modelo do projeto
-    await this.modelManager.setProjectModel(this.currentProject.path, modelName);
-    this.currentProject.model = modelName;
-    
-    Logger.success(`✅ Modelo alterado para: ${modelName}`);
   }
 
   /**

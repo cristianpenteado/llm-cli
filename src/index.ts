@@ -44,6 +44,16 @@ program
     await cli.startChat(options.model);
   });
 
+// Comando para trocar modelo
+program
+  .command('change-model')
+  .description('Troca o modelo LLM ativo')
+  .argument('<model>', 'Nome do novo modelo')
+  .action(async (model) => {
+    const cli = new LLMCLI(program.opts().logs);
+    await cli.changeModel(model);
+  });
+
 // Comando para trocar modelo durante o uso
 program
   .command('change-model')
