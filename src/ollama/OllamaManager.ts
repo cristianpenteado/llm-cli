@@ -715,24 +715,57 @@ export class OllamaManager {
         fullPrompt = `${context}\n\nPergunta: ${prompt}`;
       }
       
-      // Usar o processo em background se disponível
-      if (this.backgroundProcess && this.backgroundProcess.pid) {
-        return await this.sendToBackgroundProcess(fullPrompt);
-      }
+      // Usar spawn para melhor controle do processo
+      const { spawn } = await import('child_process');
       
-      // Fallback: usar exec diretamente
-      const { exec } = await import('child_process');
-      const { promisify } = await import('util');
-      const execAsync = promisify(exec);
-      
-      const command = `ollama run ${this.activeSession.modelName} "${fullPrompt.replace(/"/g, '\\"')}"`;
-      
-      const { stdout } = await execAsync(command, {
-        timeout: 60000, // 60s timeout
-        maxBuffer: 1024 * 1024 // 1MB buffer
+      return new Promise((resolve, reject) => {
+        const ollamaProcess = spawn('ollama', ['run', this.activeSession.modelName, fullPrompt]);
+        
+        let stdout = '';
+        let stderr = '';
+        let hasResponse = false;
+        
+        // Capturar stdout
+        ollamaProcess.stdout.on('data', (data: Buffer) => {
+          stdout += data.toString();
+          if (stdout.trim() && !hasResponse) {
+            hasResponse = true;
+            ollamaProcess.kill('SIGTERM');
+            resolve(stdout.trim());
+          }
+        });
+        
+        // Capturar stderr
+        ollamaProcess.stderr.on('data', (data: Buffer) => {
+          stderr += data.toString();
+        });
+        
+        // Processo finalizado
+        ollamaProcess.on('close', (code) => {
+          if (!hasResponse) {
+            if (code === 0 && stdout.trim()) {
+              resolve(stdout.trim());
+            } else {
+              reject(new Error(`Processo finalizado com código ${code}. Stderr: ${stderr}`));
+            }
+          }
+        });
+        
+        // Erro no processo
+        ollamaProcess.on('error', (error) => {
+          if (!hasResponse) {
+            reject(error);
+          }
+        });
+        
+        // Timeout de 60 segundos
+        setTimeout(() => {
+          if (!hasResponse) {
+            ollamaProcess.kill('SIGTERM');
+            reject(new Error('Timeout: resposta demorou mais de 60s'));
+          }
+        }, 60000);
       });
-
-      return stdout.trim();
     } catch (error) {
       Logger.error(`Erro ao enviar prompt para ${this.activeSession.modelName}:`, error);
       throw error;
