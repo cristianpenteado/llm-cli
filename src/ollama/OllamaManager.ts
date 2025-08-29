@@ -592,21 +592,13 @@ export class OllamaManager {
         await this.stopModelSession();
       }
 
-      // Iniciar processo ollama run em modo contínuo
-      const { spawn } = await import('child_process');
-      
-      const ollamaProcess = spawn('ollama', ['run', modelName], {
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-      
+      // Para versões antigas do Ollama, usar exec em vez de spawn
+      // pois ollama run não funciona bem com stdin/stdout
       this.activeSession = {
         modelName,
-        process: ollamaProcess,
-        isReady: false
+        process: null,
+        isReady: true
       };
-      
-      // Aguardar o modelo estar pronto
-      await this.waitForSessionReady();
       
     } catch (error) {
       Logger.error(`Erro ao iniciar sessão com ${modelName}:`, error);
@@ -655,67 +647,35 @@ export class OllamaManager {
       throw new Error('Sessão do modelo não está ativa');
     }
 
-    return new Promise((resolve, reject) => {
-      const { process } = this.activeSession;
+    try {
+      // Para conversas simples, usar apenas o prompt
+      let fullPrompt = prompt;
       
-      let response = '';
-      let hasResponse = false;
+      // Adicionar contexto apenas se for necessário e não for conversa simples
+      if (context && context.trim() && !this.isSimplePrompt(prompt)) {
+        fullPrompt = `${context}\n\nPergunta: ${prompt}`;
+      }
       
-      // Timeout para resposta
-      const timeoutId = setTimeout(() => {
-        if (!hasResponse) {
-          reject(new Error('Timeout: resposta demorou mais de 30s'));
-        }
-      }, 30000);
+      // Usar exec diretamente para compatibilidade com versões antigas
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
       
-      // Capturar resposta
-      process.stdout.on('data', (data: Buffer) => {
-        response += data.toString();
-        if (response.includes('\n') && !hasResponse) {
-          hasResponse = true;
-          clearTimeout(timeoutId);
-          resolve(response.trim());
-        }
+      const command = `ollama run ${this.activeSession.modelName} "${fullPrompt.replace(/"/g, '\\"')}"`;
+      
+      const { stdout } = await execAsync(command, {
+        timeout: 60000, // 60s timeout
+        maxBuffer: 1024 * 1024 // 1MB buffer
       });
-      
-      // Enviar prompt
-      process.stdin.write(prompt + '\n');
-      
-      // Se não houver resposta em 5s, considerar como resposta completa
-      setTimeout(() => {
-        if (!hasResponse) {
-          hasResponse = true;
-          clearTimeout(timeoutId);
-          resolve(response.trim() || 'Resposta vazia do modelo');
-        }
-      }, 5000);
-    });
+
+      return stdout.trim();
+    } catch (error) {
+      Logger.error(`Erro ao enviar prompt para ${this.activeSession.modelName}:`, error);
+      throw error;
+    }
   }
 
-  /**
-   * Aguarda modelo estar pronto (com timeout)
-   */
-  private async waitForModelReady(modelName: string): Promise<void> {
-    const maxWait = 10000; // 10s máximo
-    const checkInterval = 500; // Verificar a cada 500ms
-    
-    for (let i = 0; i < maxWait; i += checkInterval) {
-      try {
-        const models = await this.listModels();
-        const model = models.find(m => m.name === modelName);
-        
-        if (model && model.status === 'ready') {
-          return;
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, checkInterval));
-      } catch {
-        // Continuar tentando
-      }
-    }
-    
-    Logger.warn(`Modelo ${modelName} não ficou pronto em ${maxWait}ms`);
-  }
+
 
   /**
    * Hash simples para cache de prompts
