@@ -22,7 +22,7 @@ export class OllamaManager {
   }
 
   /**
-   * Inicializa o gerenciador Ollama e baixa o modelo padrão
+   * Inicializa o gerenciador Ollama
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
@@ -31,22 +31,25 @@ export class OllamaManager {
 
     try {
       Logger.ollama('🚀 Inicializando gerenciador Ollama...');
-      
-      // Verificar se o Ollama está instalado
+
+      // Verificar instalação
       await this.checkOllamaInstallation();
-      
-      // Verificar se o servidor está rodando
+
+      // Verificar servidor
       await this.checkOllamaServer();
-      
-      // Baixar modelo padrão se não existir
+
+      // Garantir modelo padrão
       await this.ensureDefaultModel();
-      
+
+      // Pré-carregar o modelo para evitar delay na primeira execução
+      await this.preloadModel(this.defaultModel);
+
       // Iniciar modelo em background automaticamente
       await this.startModelInBackground(this.defaultModel);
-      
+
       this.isInitialized = true;
       Logger.success('✅ Gerenciador Ollama inicializado com modelo padrão');
-      
+
     } catch (error) {
       Logger.error('Erro ao inicializar gerenciador Ollama:', error);
       throw error;
@@ -583,6 +586,56 @@ export class OllamaManager {
     } catch (error) {
       Logger.warn('Erro ao parsear saída do ollama list, retornando lista vazia');
       return [];
+    }
+  }
+
+  /**
+   * Pré-carrega o modelo para evitar delay na primeira execução
+   */
+  private async preloadModel(modelName: string): Promise<void> {
+    try {
+      Logger.ollama(`🔄 Pré-carregando modelo ${modelName}...`);
+      
+      // Usar spawn para pré-carregar com timeout mais longo
+      const { spawn } = await import('child_process');
+      
+      return new Promise((resolve, reject) => {
+        const preloadProcess = spawn('ollama', ['run', modelName, 'test']);
+        
+        let hasStarted = false;
+        
+        // Aguardar o modelo começar a responder
+        preloadProcess.stdout.on('data', () => {
+          if (!hasStarted) {
+            hasStarted = true;
+            preloadProcess.kill('SIGTERM');
+            resolve();
+          }
+        });
+        
+        // Timeout de 2 minutos para pré-carregamento
+        setTimeout(() => {
+          if (!hasStarted) {
+            preloadProcess.kill('SIGTERM');
+            resolve(); // Resolver mesmo com timeout para não bloquear
+          }
+        }, 120000);
+        
+        // Se o processo terminar antes, resolver
+        preloadProcess.on('close', () => {
+          if (!hasStarted) {
+            resolve();
+          }
+        });
+        
+        preloadProcess.on('error', () => {
+          resolve(); // Não falhar se pré-carregamento falhar
+        });
+      });
+      
+    } catch (error) {
+      Logger.warn(`Pré-carregamento do modelo ${modelName} falhou:`, error);
+      // Não falhar se pré-carregamento falhar
     }
   }
 
