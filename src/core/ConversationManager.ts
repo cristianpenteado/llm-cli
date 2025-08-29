@@ -555,4 +555,70 @@ export class ConversationManager {
     console.log(chalk.hex('#C4B5FD')('└' + '─'.repeat(62) + '┘'));
     console.log('\n');
   }
+
+  /**
+   * Mostra indicador de processamento
+   */
+  private showProcessingIndicator(): void {
+    console.log(chalk.hex('#8B5CF6')('🔄 Processando...'));
+  }
+
+  /**
+   * Mostra resposta de forma elegante
+   */
+  private showResponse(content: string): void {
+    console.log('\n');
+    
+    // Dividir conteúdo em linhas para melhor formatação
+    const lines = content.split('\n');
+    
+    lines.forEach((line, index) => {
+      if (line.trim() === '') {
+        console.log('');
+      } else {
+        const padding = ' '.repeat(2);
+        console.log(chalk.hex('#A78BFA')(`${padding}${line}`));
+      }
+    });
+    
+    console.log('\n');
+    console.log(chalk.hex('#C4B5FD')('└' + '─'.repeat(62) + '┘'));
+  }
+
+  /**
+   * Mostra sugestões de forma elegante
+   */
+  private showSuggestions(suggestions: string[]): void {
+    console.log('\n');
+    console.log(chalk.hex('#8B5CF6')('┌─ ' + chalk.bold('💡 SUGESTÕES') + ' ─' + '─'.repeat(45) + '┐'));
+    
+    suggestions.forEach((suggestion, index) => {
+      const padding = ' '.repeat(2);
+      console.log(chalk.hex('#A78BFA')(`${padding}${index + 1}. ${suggestion}`));
+    });
+    
+    console.log(chalk.hex('#C4B5FD')('└' + '─'.repeat(62) + '┘'));
+    console.log('\n');
+  }
+
+  /**
+   * Mostra resposta de erro de forma elegante
+   */
+  private showErrorResponse(): void {
+    console.log('\n');
+    console.log(chalk.hex('#EF4444')('┌─ ' + chalk.bold('❌ ERRO') + ' ─' + '─'.repeat(52) + '┐'));
+    console.log(chalk.hex('#F87171')(`  Desculpe, ocorreu um erro ao processar sua mensagem.`));
+    console.log(chalk.hex('#F87171')(`  Tente novamente ou use /help para ver comandos disponíveis.`));
+    console.log(chalk.hex('#FCA5A5')('└' + '─'.repeat(62) + '┘'));
+    console.log('\n');
+  }
+
+  /**
+   * Promise com timeout
+   */
+  private timeoutPromise<T>(ms: number, message: string): Promise<T> {
+    return new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message)), ms);
+    });
+  }
 }

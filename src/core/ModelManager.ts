@@ -107,8 +107,10 @@ export class ModelManager {
     
     while (Date.now() - startTime < timeout) {
       try {
-        const status = await this.ollamaManager.getModelStatus(modelName);
-        if (status === 'ready') {
+        // Verificar se o modelo está na lista de modelos disponíveis
+        const models = await this.ollamaManager.listModels();
+        const model = models.find(m => m.name === modelName);
+        if (model && model.status === 'ready') {
           return;
         }
         
@@ -255,10 +257,10 @@ export class ModelManager {
     Logger.info(`🛑 Parando modelo: ${modelName}`);
     
     try {
-      await this.ollamaManager.stopModel(modelName);
+      // Ollama gerencia a memória automaticamente, apenas remover do controle local
       this.activeModels.delete(modelName);
       
-      Logger.success(`✅ Modelo ${modelName} parado`);
+      Logger.success(`✅ Modelo ${modelName} liberado da memória`);
       
     } catch (error) {
       Logger.error('Erro ao parar modelo:', error);

@@ -34,6 +34,9 @@ export class LLMCLI {
   async initializeProject(options: { model?: string; force?: boolean }): Promise<void> {
     Logger.info('🚀 Inicializando novo projeto...');
 
+    // Inicializar OllamaManager (baixa modelo padrão automaticamente)
+    await this.ollamaManager.initialize();
+
     // Inicializar projeto
     const projectConfig = await this.projectManager.initializeProject(options);
     this.currentProject = projectConfig;
@@ -151,6 +154,9 @@ export class LLMCLI {
    */
   async startChat(specificModel?: string): Promise<void> {
     Logger.info('💬 Iniciando modo conversacional...');
+    
+    // Inicializar OllamaManager (baixa modelo padrão automaticamente)
+    await this.ollamaManager.initialize();
     
     // Verificar se o projeto está inicializado
     if (!this.currentProject) {

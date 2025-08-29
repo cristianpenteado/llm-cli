@@ -1,40 +1,41 @@
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
-import { OllamaConfig, ModelConfig } from '../types';
 import { Logger } from '../utils/Logger';
-import { ConfigManager } from '../utils/ConfigManager';
-import * as fs from 'fs-extra';
-import * as path from 'path';
+import { ModelConfig } from '../types';
 
 const execAsync = promisify(exec);
 
 export class OllamaManager {
-  private config: OllamaConfig;
-  private configManager: ConfigManager;
-  private isConnected: boolean = false;
-
-  constructor() {
-    this.configManager = new ConfigManager();
-    this.config = this.configManager.getOllamaConfig();
-  }
+  private cache = new Map<string, { response: string; timestamp: number; ttl: number }>();
+  private modelCache = new Map<string, ModelConfig[]>();
+  private lastModelList = 0;
+  private readonly CACHE_TTL = 30000; // 30 segundos
+  private readonly MODEL_LIST_CACHE_TTL = 10000; // 10 segundos
+  private readonly DEFAULT_MODEL = 'phi3:mini';
+  private isInitialized = false;
 
   /**
-   * Inicializa o gerenciador Ollama
+   * Inicializa o gerenciador Ollama e baixa o modelo padrão
    */
   async initialize(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+
     try {
       Logger.ollama('🚀 Inicializando gerenciador Ollama...');
       
       // Verificar se o Ollama está instalado
       await this.checkOllamaInstallation();
       
-      // Verificar se o servidor Ollama está rodando
+      // Verificar se o servidor está rodando
       await this.checkOllamaServer();
       
-      // Conectar ao servidor
-      await this.connect();
+      // Baixar modelo padrão se não existir
+      await this.ensureDefaultModel();
       
-      Logger.success('✅ Gerenciador Ollama inicializado');
+      this.isInitialized = true;
+      Logger.success('✅ Gerenciador Ollama inicializado com modelo padrão');
       
     } catch (error) {
       Logger.error('Erro ao inicializar gerenciador Ollama:', error);
@@ -62,7 +63,7 @@ export class OllamaManager {
    */
   private async checkOllamaServer(): Promise<void> {
     try {
-      const { stdout } = await execAsync(`curl -s http://${this.config.serverUrl}:${this.config.port}/api/tags`);
+      const { stdout } = await execAsync('ollama list --json');
       Logger.ollama('✅ Servidor Ollama está rodando');
     } catch (error) {
       Logger.warn('⚠️ Servidor Ollama não está rodando');
@@ -70,9 +71,10 @@ export class OllamaManager {
       
       try {
         // Iniciar servidor Ollama em background
-        spawn('ollama', ['serve'], {
-          detached: true,
-          stdio: 'ignore'
+        exec('ollama serve', (error) => {
+          if (error) {
+            Logger.warn('⚠️ Erro ao iniciar servidor Ollama:', error.message);
+          }
         });
         
         // Aguardar servidor estar pronto
@@ -95,7 +97,7 @@ export class OllamaManager {
     
     while (attempts < maxAttempts) {
       try {
-        const { stdout } = await execAsync(`curl -s http://${this.config.serverUrl}:${this.config.port}/api/tags`);
+        const { stdout } = await execAsync('ollama list --json');
         if (stdout) {
           return;
         }
@@ -111,82 +113,158 @@ export class OllamaManager {
   }
 
   /**
-   * Aguarda um modelo ficar pronto
+   * Garante que o modelo padrão está disponível
    */
-  private async waitForModelReady(modelName: string): Promise<void> {
-    let attempts = 0;
-    const maxAttempts = 60;
-    
-    while (attempts < maxAttempts) {
-      try {
-        const models = await this.listModels();
-        const model = models.find(m => m.name === modelName);
-        
-        if (model && model.status === 'ready') {
-          return;
-        }
-      } catch (error) {
-        // Modelo ainda não está pronto
-      }
-      
-      attempts++;
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    
-    throw new Error(`Timeout aguardando modelo ${modelName} ficar pronto`);
-  }
-
-  /**
-   * Conecta ao servidor Ollama
-   */
-  async connect(): Promise<void> {
+  private async ensureDefaultModel(): Promise<void> {
     try {
-      Logger.ollama('🔌 Conectando ao servidor Ollama...');
+      const models = await this.listModels();
+      const defaultModel = models.find(m => m.name === this.DEFAULT_MODEL);
       
-      // Testar conexão usando a API de tags
-      const { stdout } = await execAsync(`curl -s http://${this.config.serverUrl}:${this.config.port}/api/tags`);
-      
-      if (stdout) {
-        this.isConnected = true;
-        Logger.success('✅ Conectado ao servidor Ollama');
-      } else {
-        throw new Error('Servidor Ollama não respondeu corretamente');
+      if (defaultModel) {
+        Logger.ollama(`✅ Modelo padrão ${this.DEFAULT_MODEL} já está disponível`);
+        return;
       }
+      
+      Logger.ollama(`📥 Baixando modelo padrão ${this.DEFAULT_MODEL}...`);
+      await this.downloadModel(this.DEFAULT_MODEL);
+      Logger.success(`✅ Modelo padrão ${this.DEFAULT_MODEL} baixado com sucesso`);
       
     } catch (error) {
-      Logger.error('Erro ao conectar ao servidor Ollama:', error);
-      this.isConnected = false;
-      throw new Error('Falha ao conectar ao servidor Ollama');
+      Logger.error(`Erro ao baixar modelo padrão ${this.DEFAULT_MODEL}:`, error);
+      throw error;
     }
   }
 
   /**
-   * Verifica se está conectado
+   * Faz download de um modelo
    */
-  isConnectedToServer(): boolean {
-    return this.isConnected;
+  async downloadModel(modelName: string): Promise<void> {
+    try {
+      Logger.ollama(`📥 Fazendo download do modelo ${modelName}...`);
+      
+      // Usar o comando ollama pull com timeout
+      const result = await Promise.race([
+        execAsync(`ollama pull ${modelName}`),
+        this.timeoutPromise(300000, `Timeout: download do modelo ${modelName} demorou mais de 5 minutos`) // 5 min
+      ]) as { stdout: string; stderr: string };
+      
+      if (result.stderr && !result.stderr.includes('pulling')) {
+        throw new Error(result.stderr);
+      }
+      
+      Logger.ollama(`✅ Download do modelo ${modelName} concluído`);
+      
+      // Limpar cache de modelos para refletir a mudança
+      this.modelCache.clear();
+      
+    } catch (error) {
+      Logger.error(`Erro ao fazer download do modelo ${modelName}:`, error);
+      throw error;
+    }
   }
 
   /**
-   * Lista modelos disponíveis
+   * Gera resposta do modelo com otimizações de performance
+   */
+  async generateResponse(modelName: string, prompt: string, context?: string): Promise<{ response: string }> {
+    // Garantir inicialização
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    const cacheKey = `${modelName}:${this.hashPrompt(prompt)}`;
+    
+    // Verificar cache primeiro
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      Logger.ollama('⚡ Resposta retornada do cache');
+      return { response: cached.response };
+    }
+
+    try {
+      // Verificar se o modelo existe, se não, tentar baixar
+      await this.ensureModelAvailable(modelName);
+      
+      // Garantir que o modelo está ativo (assíncrono)
+      this.ensureModelActive(modelName).catch(() => {}); // Não bloquear
+
+      Logger.ollama(`💬 Gerando resposta do modelo: ${modelName}`);
+      
+      // Usar timeout para evitar esperas longas
+      const response = await Promise.race([
+        this.callOllama(modelName, prompt, context),
+        this.timeoutPromise(30000, 'Timeout: resposta demorou mais de 30s')
+      ]);
+
+      // Cache da resposta
+      this.cache.set(cacheKey, {
+        response: response as string,
+        timestamp: Date.now(),
+        ttl: this.CACHE_TTL
+      });
+
+      return { response: response as string };
+    } catch (error) {
+      Logger.error('Erro ao gerar resposta:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Garante que o modelo está disponível
+   */
+  private async ensureModelAvailable(modelName: string): Promise<void> {
+    const models = await this.listModels();
+    const model = models.find(m => m.name === modelName);
+    
+    if (!model) {
+      if (modelName === this.DEFAULT_MODEL) {
+        // Para o modelo padrão, sempre tentar baixar
+        await this.downloadModel(modelName);
+      } else {
+        // Para outros modelos, informar que precisa baixar
+        throw new Error(`Modelo ${modelName} não encontrado. Use "ollama pull ${modelName}" para baixá-lo.`);
+      }
+    }
+  }
+
+  /**
+   * Chama Ollama com otimizações
+   */
+  private async callOllama(modelName: string, prompt: string, context?: string): Promise<string> {
+    const fullPrompt = context ? `${context}\n\nPergunta: ${prompt}` : prompt;
+    
+    const command = `ollama run ${modelName} "${fullPrompt.replace(/"/g, '\\"')}"`;
+    
+    const { stdout } = await execAsync(command, {
+      timeout: 25000, // 25s timeout
+      maxBuffer: 1024 * 1024 // 1MB buffer
+    });
+
+    return stdout.trim();
+  }
+
+  /**
+   * Lista modelos com cache otimizado
    */
   async listModels(): Promise<ModelConfig[]> {
-    if (!this.isConnected) {
-      await this.connect();
+    const now = Date.now();
+    
+    // Verificar cache de modelos
+    if (this.modelCache.has('all') && (now - this.lastModelList) < this.MODEL_LIST_CACHE_TTL) {
+      return this.modelCache.get('all') || [];
     }
 
     try {
       Logger.ollama('📋 Listando modelos disponíveis...');
       
-      const { stdout } = await execAsync(`curl -s http://${this.config.serverUrl}:${this.config.port}/api/tags`);
-      const response = JSON.parse(stdout);
-      
-      if (!response.models) {
-        Logger.warn('⚠️ Nenhum modelo encontrado');
-        return [];
-      }
-      
-      const models: ModelConfig[] = response.models.map((model: any) => ({
+      const { stdout } = await execAsync('ollama list --json', {
+        timeout: 5000, // 5s timeout para listar modelos
+        maxBuffer: 1024 * 1024
+      });
+
+      const rawModels = JSON.parse(stdout);
+      const models: ModelConfig[] = rawModels.map((model: any) => ({
         name: model.name,
         description: `Modelo Ollama: ${model.name}`,
         size: this.formatModelSize(model.size || 0),
@@ -196,6 +274,10 @@ export class OllamaManager {
         isLocal: true,
         status: 'ready'
       }));
+      
+      // Cache dos modelos
+      this.modelCache.set('all', models);
+      this.lastModelList = now;
       
       Logger.ollama(`✅ ${models.length} modelos encontrados`);
       return models;
@@ -207,237 +289,80 @@ export class OllamaManager {
   }
 
   /**
-   * Obtém informações detalhadas de um modelo
-   */
-  async getModelInfo(modelName: string): Promise<ModelConfig | null> {
-    try {
-      const models = await this.listModels();
-      return models.find(m => m.name === modelName) || null;
-    } catch (error) {
-      Logger.error('Erro ao obter informações do modelo:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Gera resposta de um modelo
-   */
-  async generateResponse(modelName: string, prompt: string, context?: string): Promise<{ response: string }> {
-    try {
-      Logger.ollama(`💬 Gerando resposta do modelo: ${modelName}`);
-      
-      // Garantir que o modelo está ativo
-      await this.ensureModelActive(modelName);
-      
-      // Preparar prompt com contexto
-      const fullPrompt = context ? `${context}\n\nUsuário: ${prompt}\nAssistente:` : prompt;
-      
-      // Enviar prompt para o Ollama
-      const { stdout } = await execAsync(`echo '${fullPrompt.replace(/'/g, "'\"'\"'")}' | ollama run ${modelName}`);
-      
-      Logger.success(`✅ Resposta gerada do modelo ${modelName}`);
-      
-      return {
-        response: stdout.trim()
-      };
-      
-    } catch (error) {
-      Logger.error('Erro ao gerar resposta do modelo:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Garante que o modelo está ativo
+   * Garante que o modelo está ativo (otimizado)
    */
   async ensureModelActive(modelName: string): Promise<void> {
     try {
+      // Verificar se o modelo já está rodando (sem bloquear)
       const models = await this.listModels();
       const model = models.find(m => m.name === modelName);
       
-      if (!model) {
-        throw new Error(`Modelo ${modelName} não encontrado`);
+      if (model && model.status === 'ready') {
+        return; // Modelo já está ativo
       }
-      
-      if (model.status !== 'ready') {
-        Logger.ollama(`🚀 Iniciando modelo: ${modelName}`);
-        await this.startModel(modelName);
-        
-        // Aguardar modelo ficar pronto
-        await this.waitForModelReady(modelName);
-      }
-      
-    } catch (error) {
-      Logger.error('Erro ao garantir modelo ativo:', error);
-      throw error;
-    }
-  }
 
-  /**
-   * Inicia um modelo
-   */
-  async startModel(modelName: string): Promise<void> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
-    try {
+      // Iniciar modelo em background
       Logger.ollama(`🚀 Iniciando modelo ${modelName}...`);
       
-      // Para Ollama, os modelos são carregados automaticamente quando solicitados
-      // Vamos apenas verificar se o modelo está disponível
-      const modelInfo = await this.getModelInfo(modelName);
-      if (!modelInfo) {
-        throw new Error(`Modelo ${modelName} não encontrado`);
+      exec(`ollama run ${modelName} "test"`, (error) => {
+        if (error) {
+          Logger.warn(`Modelo ${modelName} não pôde ser iniciado:`, error.message);
+        }
+      });
+
+      // Aguardar um pouco para o modelo estar pronto
+      await this.waitForModelReady(modelName);
+      
+    } catch (error) {
+      Logger.warn(`Erro ao garantir modelo ativo ${modelName}:`, error);
+    }
+  }
+
+  /**
+   * Aguarda modelo estar pronto (com timeout)
+   */
+  private async waitForModelReady(modelName: string): Promise<void> {
+    const maxWait = 10000; // 10s máximo
+    const checkInterval = 500; // Verificar a cada 500ms
+    
+    for (let i = 0; i < maxWait; i += checkInterval) {
+      try {
+        const models = await this.listModels();
+        const model = models.find(m => m.name === modelName);
+        
+        if (model && model.status === 'ready') {
+          return;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+      } catch {
+        // Continuar tentando
       }
-      
-      Logger.ollama(`✅ Modelo ${modelName} está pronto para uso`);
-      
-    } catch (error) {
-      Logger.error('Erro ao iniciar modelo:', error);
-      throw error;
     }
+    
+    Logger.warn(`Modelo ${modelName} não ficou pronto em ${maxWait}ms`);
   }
 
   /**
-   * Para um modelo
+   * Hash simples para cache de prompts
    */
-  async stopModel(modelName: string): Promise<void> {
-    if (!this.isConnected) {
-      await this.connect();
+  private hashPrompt(prompt: string): string {
+    let hash = 0;
+    for (let i = 0; i < prompt.length; i++) {
+      const char = prompt.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
     }
-
-    try {
-      Logger.ollama(`🛑 Parando modelo ${modelName}...`);
-      
-      // Ollama gerencia a memória automaticamente, não há necessidade de parar modelos
-      Logger.ollama(`✅ Modelo ${modelName} foi liberado da memória`);
-      
-    } catch (error) {
-      Logger.error('Erro ao parar modelo:', error);
-      throw error;
-    }
+    return hash.toString();
   }
 
   /**
-   * Obtém status de um modelo
+   * Promise com timeout
    */
-  async getModelStatus(modelName: string): Promise<string> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
-    try {
-      Logger.ollama(`📊 Verificando status do modelo ${modelName}...`);
-      
-      const modelInfo = await this.getModelInfo(modelName);
-      if (modelInfo) {
-        Logger.ollama(`✅ Status do modelo ${modelName}: ready`);
-        return 'ready';
-      } else {
-        Logger.ollama(`❌ Status do modelo ${modelName}: not_found`);
-        return 'not_found';
-      }
-      
-    } catch (error) {
-      Logger.error('Erro ao obter status do modelo:', error);
-      return 'error';
-    }
-  }
-
-  /**
-   * Faz download de um modelo
-   */
-  async downloadModel(modelName: string): Promise<void> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
-    try {
-      Logger.ollama(`📥 Fazendo download do modelo ${modelName}...`);
-      
-      // Usar o comando ollama pull
-      const { stdout, stderr } = await execAsync(`ollama pull ${modelName}`);
-      
-      if (stderr && !stderr.includes('pulling')) {
-        throw new Error(stderr);
-      }
-      
-      Logger.ollama(`✅ Download do modelo ${modelName} concluído`);
-      
-    } catch (error) {
-      Logger.error('Erro ao fazer download do modelo:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Remove um modelo
-   */
-  async removeModel(modelName: string): Promise<void> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
-    try {
-      Logger.ollama(`🗑️ Removendo modelo ${modelName}...`);
-      
-      // Usar o comando ollama rm
-      await execAsync(`ollama rm ${modelName}`);
-      
-      Logger.ollama(`✅ Modelo ${modelName} removido`);
-      
-    } catch (error) {
-      Logger.error('Erro ao remover modelo:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Obtém estatísticas do servidor
-   */
-  async getServerStats(): Promise<any> {
-    if (!this.isConnected) {
-      await this.connect();
-    }
-
-    try {
-      Logger.ollama('📊 Obtendo estatísticas do servidor...');
-      
-      // Ollama não tem endpoint de estatísticas, vamos retornar informações básicas
-      const stats = {
-        serverUrl: this.config.serverUrl,
-        port: this.config.port,
-        isConnected: this.isConnected,
-        modelsPath: this.config.modelsPath
-      };
-      
-      Logger.ollama('✅ Estatísticas do servidor obtidas');
-      return stats;
-      
-    } catch (error) {
-      Logger.error('Erro ao obter estatísticas do servidor:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Para o servidor Ollama
-   */
-  async shutdown(): Promise<void> {
-    try {
-      Logger.ollama('🛑 Parando servidor Ollama...');
-      
-      // Ollama não tem endpoint de shutdown via API, o usuário deve parar manualmente
-      Logger.warn('⚠️ Para parar o servidor Ollama, execute: pkill ollama');
-      
-      this.isConnected = false;
-      Logger.success('✅ Gerenciador Ollama desconectado');
-      
-    } catch (error) {
-      Logger.error('Erro ao parar servidor Ollama:', error);
-      throw error;
-    }
+  private timeoutPromise<T>(ms: number, message: string): Promise<T> {
+    return new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message)), ms);
+    });
   }
 
   /**
@@ -452,26 +377,18 @@ export class OllamaManager {
   }
 
   /**
-   * Verifica se o servidor está rodando e pronto
+   * Limpa cache manualmente
    */
-  async isServerReady(): Promise<boolean> {
-    try {
-      const { stdout } = await execAsync(`curl -s http://${this.config.serverUrl}:${this.config.port}/api/tags`);
-      return !!stdout;
-    } catch {
-      return false;
-    }
+  clearCache(): void {
+    this.cache.clear();
+    this.modelCache.clear();
+    Logger.ollama('🗑️ Cache limpo');
   }
 
   /**
-   * Obtém estatísticas de uso
+   * Obtém o modelo padrão
    */
-  getOllamaStats(): any {
-    return {
-      isConnected: this.isConnected,
-      serverUrl: this.config.serverUrl,
-      port: this.config.port,
-      modelsPath: this.config.modelsPath
-    };
+  getDefaultModel(): string {
+    return this.DEFAULT_MODEL;
   }
 }
