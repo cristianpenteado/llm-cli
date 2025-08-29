@@ -54,6 +54,15 @@ program
     await cli.changeModel(model);
   });
 
+// Comando para verificar status
+program
+  .command('status')
+  .description('Mostra o status atual do projeto e modelo')
+  .action(async () => {
+    const cli = new LLMCLI(program.opts().logs);
+    await cli.showStatus();
+  });
+
 // Comando para trocar modelo durante o uso
 program
   .command('change-model')

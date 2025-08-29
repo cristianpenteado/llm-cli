@@ -629,20 +629,26 @@ export class OllamaManager {
         }
 
         if (this.verboseLogs) {
-          Logger.ollama(`🚀 [LOGS] Iniciando spawn do modelo ${modelName}`);
+          Logger.ollama(`🚀 [LOGS] Iniciando processo em background para modelo ${modelName}`);
         }
 
-        // Iniciar modelo em modo persistente com stdio para comunicação
+        // Usar nohup para garantir que o processo rode em background
         const { spawn } = await import('child_process');
         
-        this.persistentModelProcess = spawn('ollama', ['run', modelName], {
-          stdio: ['pipe', 'pipe', 'pipe'], // Manter stdin/stdout para comunicação
-          detached: false // Processo controlado
+        // Comando: nohup ollama run <modelo> > /tmp/ollama-<modelo>.log 2>&1 &
+        const logFile = `/tmp/ollama-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}.log`;
+        
+        this.persistentModelProcess = spawn('nohup', [
+          'ollama', 'run', modelName
+        ], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          detached: true, // Processo independente
+          shell: true
         });
 
         if (this.verboseLogs) {
-          Logger.ollama(`🔍 [LOGS] Processo spawnado com PID: ${this.persistentModelProcess.pid}`);
-          Logger.ollama(`🔍 [LOGS] stdio configurado: pipe, pipe, pipe`);
+          Logger.ollama(`🔍 [LOGS] Processo nohup iniciado com PID: ${this.persistentModelProcess.pid}`);
+          Logger.ollama(`🔍 [LOGS] Logs salvos em: ${logFile}`);
         }
 
         // Configurar listeners para o processo
@@ -661,7 +667,13 @@ export class OllamaManager {
           this.persistentModelProcess = null;
         });
 
-        Logger.ollama(`✅ Modelo ${modelName} iniciado em modo persistente`);
+        // Aguardar um pouco para o processo estar ativo
+        setTimeout(() => {
+          if (this.persistentModelProcess && this.persistentModelProcess.pid) {
+            Logger.ollama(`✅ Modelo ${modelName} iniciado em modo persistente (PID: ${this.persistentModelProcess.pid})`);
+            Logger.ollama(`📝 Logs disponíveis em: ${logFile}`);
+          }
+        }, 2000);
         
       } catch (error) {
         if (this.verboseLogs) {

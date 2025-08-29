@@ -34,56 +34,104 @@ export class LLMCLI {
    * Inicializa um novo projeto na pasta atual
    */
   async initializeProject(options: { model?: string; force?: boolean }): Promise<void> {
-    Logger.info('🚀 Inicializando novo projeto...');
+    try {
+      Logger.info('🚀 Inicializando novo projeto...');
 
-    // Inicializar OllamaManager (baixa modelo padrão automaticamente)
-    await this.ollamaManager.initialize();
+      // Validar estado do sistema antes de continuar
+      await this.validateSystemState();
 
-    // Inicializar projeto
-    const projectConfig = await this.projectManager.initializeProject(options);
-    this.currentProject = projectConfig;
+      // Inicializar OllamaManager (baixa modelo padrão automaticamente)
+      await this.ollamaManager.initialize();
 
-    // Configurar modelo
-    let selectedModel = options.model;
-    
-    if (!selectedModel) {
-      const defaultModel = await this.configManager.getDefaultModel();
-      if (defaultModel) {
-        // Verificar se o modelo padrão está disponível
-        selectedModel = await this.modelManager.ensureModelReady(defaultModel);
+      // Inicializar projeto
+      const projectConfig = await this.projectManager.initializeProject(options);
+      this.currentProject = projectConfig;
+
+      // Configurar modelo
+      let selectedModel = options.model;
+      
+      if (!selectedModel) {
+        const defaultModel = await this.configManager.getDefaultModel();
+        if (defaultModel) {
+          // Verificar se o modelo padrão está disponível
+          selectedModel = await this.modelManager.ensureModelReady(defaultModel);
+        } else {
+          // Nenhum modelo padrão, usar seleção interativa
+          Logger.info('🤖 Nenhum modelo padrão configurado. Vamos escolher um!');
+          selectedModel = await this.modelManager.selectModel();
+        }
       } else {
-        // Nenhum modelo padrão, usar seleção interativa
-        Logger.info('🤖 Nenhum modelo padrão configurado. Vamos escolher um!');
-        selectedModel = await this.modelManager.selectModel();
+        // Verificar se o modelo especificado está disponível
+        selectedModel = await this.modelManager.ensureModelReady(selectedModel);
       }
-    } else {
-      // Verificar se o modelo especificado está disponível
-      selectedModel = await this.modelManager.ensureModelReady(selectedModel);
+
+      // Configurar modelo no projeto
+      await this.modelManager.setProjectModel(projectConfig.path, selectedModel);
+      this.currentProject.model = selectedModel;
+
+      // Salvar modelo na configuração do projeto
+      await this.projectManager.updateProjectModel(projectConfig.path, selectedModel);
+
+      // Definir como modelo padrão se for primeira execução
+      if (await this.configManager.isFirstRun()) {
+        await this.configManager.setDefaultModel(selectedModel);
+        Logger.info(`💾 Modelo ${selectedModel} definido como padrão global`);
+      }
+
+      Logger.success(`✅ Projeto inicializado em: ${projectConfig.path}`);
+      Logger.info(`📁 Estrutura do projeto: ${projectConfig.language}/${projectConfig.framework}`);
+      Logger.info(`🤖 Modelo configurado: ${selectedModel}`);
+      
+      // Mostrar próximos passos
+      Logger.newline();
+      Logger.info('🎯 Próximos passos:');
+      Logger.info('  1. Use "llm chat" para iniciar uma conversa com a IA');
+      Logger.info('  2. Use "llm status" para ver o status do projeto');
+      Logger.info('  3. Use "llm change-model" para trocar o modelo se necessário');
+      
+    } catch (error) {
+      Logger.error('Erro ao inicializar projeto:', error);
+      throw error;
     }
+  }
 
-    // Configurar modelo no projeto
-    await this.modelManager.setProjectModel(projectConfig.path, selectedModel);
-    this.currentProject.model = selectedModel;
-
-    // Salvar modelo na configuração do projeto
-    await this.projectManager.updateProjectModel(projectConfig.path, selectedModel);
-
-    // Definir como modelo padrão se for primeira execução
-    if (await this.configManager.isFirstRun()) {
-      await this.configManager.setDefaultModel(selectedModel);
-      Logger.info(`💾 Modelo ${selectedModel} definido como padrão global`);
+  /**
+   * Valida o estado do sistema antes de executar comandos
+   */
+  private async validateSystemState(): Promise<void> {
+    try {
+      Logger.info('🔍 Validando estado do sistema...');
+      
+      // Verificar se o Ollama está instalado
+      try {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        
+        await execAsync('ollama --version');
+        Logger.info('✅ Ollama está instalado');
+      } catch (error) {
+        throw new Error('Ollama não está instalado. Instale em: https://ollama.ai');
+      }
+      
+      // Verificar se o servidor Ollama está rodando
+      try {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        
+        await execAsync('ollama list', { timeout: 10000 });
+        Logger.info('✅ Servidor Ollama está ativo');
+      } catch (error) {
+        throw new Error('Servidor Ollama não está respondendo. Execute: ollama serve');
+      }
+      
+      Logger.info('✅ Sistema validado com sucesso');
+      
+    } catch (error) {
+      Logger.error('❌ Falha na validação do sistema:', error);
+      throw error;
     }
-
-    Logger.success(`✅ Projeto inicializado em: ${projectConfig.path}`);
-    Logger.info(`📁 Estrutura do projeto: ${projectConfig.language}/${projectConfig.framework}`);
-    Logger.info(`🤖 Modelo configurado: ${selectedModel}`);
-    
-    // Mostrar próximos passos
-    Logger.newline();
-    Logger.info('🎯 Próximos passos:');
-    Logger.info('  1. Use "llm chat" para iniciar uma conversa com a IA');
-    Logger.info('  2. Use "llm status" para ver o status do projeto');
-    Logger.info('  3. Use "llm change-model" para trocar o modelo se necessário');
   }
 
   /**
@@ -151,6 +199,83 @@ export class LLMCLI {
       
     } catch (error) {
       Logger.error('Erro ao trocar modelo:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mostra o status atual do projeto e modelo
+   */
+  async showStatus(): Promise<void> {
+    try {
+      Logger.info('📊 Status do Projeto LLM');
+      Logger.info('═'.repeat(50));
+      
+      // Verificar se há um projeto ativo
+      if (!this.currentProject) {
+        const currentPath = process.cwd();
+        const projectConfig = await this.projectManager.loadProject(currentPath);
+        
+        if (projectConfig) {
+          this.currentProject = projectConfig;
+        } else {
+          Logger.warn('⚠️ Nenhum projeto ativo nesta pasta');
+          Logger.info('💡 Execute "llm init" para inicializar um projeto');
+          return;
+        }
+      }
+      
+      // Informações do projeto
+      Logger.info(`📁 Projeto: ${this.currentProject.name}`);
+      Logger.info(`📍 Caminho: ${this.currentProject.path}`);
+      Logger.info(`🔧 Linguagem: ${this.currentProject.language}`);
+      Logger.info(`🏗️ Framework: ${this.currentProject.framework}`);
+      Logger.info(`🤖 Modelo: ${this.currentProject.model || 'Não configurado'}`);
+      Logger.info(`📅 Criado em: ${this.currentProject.createdAt.toLocaleDateString('pt-BR')}`);
+      
+      if (this.currentProject.updatedAt) {
+        Logger.info(`📅 Atualizado em: ${this.currentProject.updatedAt.toLocaleDateString('pt-BR')}`);
+      }
+      
+      Logger.newline();
+      
+      // Status do Ollama
+      try {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        
+        const { stdout: version } = await execAsync('ollama --version');
+        Logger.info(`🚀 Ollama: ${version.trim()}`);
+        
+        const { stdout: models } = await execAsync('ollama list');
+        const modelCount = models.trim().split('\n').length - 1; // -1 para cabeçalho
+        Logger.info(`📋 Modelos disponíveis: ${modelCount}`);
+        
+        // Mostrar modelos disponíveis
+        const modelLines = models.trim().split('\n').slice(1); // Pular cabeçalho
+        modelLines.forEach(line => {
+          if (line.trim()) {
+            const parts = line.trim().split(/\s+/);
+            const modelName = parts[0];
+            const isActive = this.currentProject?.model === modelName;
+            const status = isActive ? '🟢 ATIVO' : '⚪ Disponível';
+            Logger.info(`   ${status} ${modelName}`);
+          }
+        });
+        
+      } catch (error) {
+        Logger.warn('⚠️ Não foi possível verificar status do Ollama');
+      }
+      
+      Logger.newline();
+      Logger.info('🎯 Comandos disponíveis:');
+      Logger.info('   • llm chat - Iniciar conversa com IA');
+      Logger.info('   • llm change-model <nome> - Trocar modelo');
+      Logger.info('   • llm status - Ver este status novamente');
+      
+    } catch (error) {
+      Logger.error('Erro ao mostrar status:', error);
       throw error;
     }
   }
@@ -244,20 +369,39 @@ export class LLMCLI {
     }
     
     if (!modelToUse) {
-      modelToUse = await this.configManager.getDefaultModel();
-    }
-    
-    // Se ainda não houver modelo, usar phi3:mini como padrão
-    if (!modelToUse) {
-      modelToUse = 'phi3:mini';
-      Logger.info(`🤖 Usando modelo padrão: ${modelToUse}`);
-      
-      // Definir como modelo padrão global
-      await this.configManager.setDefaultModel(modelToUse);
+      const defaultModel = await this.configManager.getDefaultModel();
+      if (defaultModel) {
+        modelToUse = defaultModel;
+      } else {
+        // Nenhum modelo configurado, usar seleção interativa
+        Logger.info('🤖 Nenhum modelo configurado. Vamos escolher um!');
+        modelToUse = await this.modelManager.selectModel();
+      }
     }
 
-    // Inicializar modelo se necessário
-    await this.modelManager.ensureModelReady(modelToUse);
+    // Verificar se o modelo está disponível
+    const availableModels = await this.ollamaManager.listModels();
+    const modelExists = availableModels.some(m => m.name === modelToUse);
+
+    if (!modelExists) {
+      Logger.warn(`⚠️ Modelo "${modelToUse}" não encontrado. Tentando baixar...`);
+      try {
+        await this.ollamaManager.downloadModelWithProgress(modelToUse);
+        Logger.success(`✅ Modelo ${modelToUse} baixado com sucesso!`);
+      } catch (downloadError) {
+        throw new Error(`Modelo "${modelToUse}" não encontrado e não pôde ser baixado. Use "ollama pull ${modelToUse}" manualmente.`);
+      }
+    }
+
+    // Configurar modelo no projeto se não estiver configurado
+    if (this.currentProject && this.currentProject.model !== modelToUse) {
+      await this.modelManager.setProjectModel(this.currentProject.path, modelToUse);
+      this.currentProject.model = modelToUse;
+      await this.projectManager.updateProjectModel(this.currentProject.path, modelToUse);
+    }
+
+    // Inicializar modelo
+    await this.ollamaManager.initialize(modelToUse);
     
     Logger.success(`🤖 Conectado ao modelo: ${modelToUse}`);
     Logger.info('💡 Digite suas perguntas ou comandos. Use "/help" para ver comandos disponíveis.');
@@ -323,37 +467,5 @@ export class LLMCLI {
     
     const undone = await this.fileManager.rollback(numberOfChanges);
     Logger.success(`✅ ${undone} alteração(ões) desfeita(s) com sucesso!`);
-  }
-
-  /**
-   * Mostra status do projeto atual
-   */
-  async showStatus(): Promise<void> {
-    if (!this.currentProject) {
-      Logger.warn('⚠️ Nenhum projeto ativo.');
-      Logger.info('Use "llm init" para inicializar um projeto.');
-      return;
-    }
-
-    Logger.info('📊 Status do Projeto:');
-    Logger.info(`  📁 Caminho: ${this.currentProject.path}`);
-    Logger.info(`  🔤 Linguagem: ${this.currentProject.language}`);
-    Logger.info(`  🏗️ Framework: ${this.currentProject.framework}`);
-    Logger.info(`  🤖 Modelo: ${this.currentProject.model || 'Não configurado'}`);
-    Logger.info(`  📅 Criado em: ${this.currentProject.createdAt.toLocaleDateString()}`);
-    
-    // Mostrar estatísticas do projeto
-    const stats = await this.fileManager.getProjectStats(this.currentProject.path);
-    Logger.info(`  📄 Arquivos: ${stats.fileCount}`);
-    Logger.info(`  📝 Linhas de código: ${stats.lineCount}`);
-    
-    // Mostrar histórico de alterações
-    const history = await this.fileManager.getChangeHistory();
-    if (history.length > 0) {
-      Logger.info(`  📚 Últimas alterações: ${history.length}`);
-      history.slice(-3).forEach((change, index) => {
-        Logger.info(`    ${index + 1}. ${change.description} (${change.timestamp.toLocaleDateString()})`);
-      });
-    }
   }
 }
