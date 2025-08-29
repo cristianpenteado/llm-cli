@@ -1,41 +1,17 @@
-# 🚀 LLM CLI - Agente de IA para Modelos Locais
+# 🚀 **LLM CLI - AI Agent Terminal**
 
-> **CLI inteligente que funciona como um agente de IA no terminal, integrado com modelos LLMs locais via Ollama**
+> **CLI inteligente para desenvolvimento com modelos LLMs locais**  
+> **Desenvolvido para a comunidade ❤️**
 
-## 🎯 **Proposta da CLI**
+## 🌟 **Principais Características**
 
-A **LLM CLI** é uma ferramenta de linha de comando que transforma seu terminal em um assistente de IA inteligente. Diferente de outras CLIs que dependem de APIs externas, ela funciona **100% localmente** usando modelos LLMs rodando na sua máquina via Ollama.
-
-### 🌟 **Principais Características**
-
-- **🤖 Agente de IA Local**: Funciona offline com modelos rodando na sua máquina
-- **🚀 Inicialização Inteligente**: Detecta automaticamente o tipo de projeto e sugere modelos compatíveis
-- **💬 Interface Conversacional**: Chat natural com comandos especiais para desenvolvimento
-- **📁 Gerenciamento de Projetos**: Contexto inteligente e histórico de alterações
-- **🔄 Fallback Automático**: Se o MCP falhar, usa Ollama diretamente
-- **📝 Integração com Git**: Atualiza automaticamente `.gitignore` para incluir `.llm-cli`
-
-## 🚀 **Instalação Rápida**
-
-### Pré-requisitos
-- **Node.js** 18+ e **npm**
-- **Ollama** instalado e rodando
-- **Linux** (Ubuntu/Debian recomendado)
-
-### Instalação Global
-```bash
-# Instalar via NPM
-npm install -g llm-cli
-
-# Verificar instalação
-llm --version
-```
-
-### Script de Instalação Automática
-```bash
-# Baixar e executar script de instalação
-curl -fsSL https://raw.githubusercontent.com/seu-usuario/llm-cli/main/scripts/install.sh | bash
-```
+- **🤖 AI Agent Local**: Funciona offline com modelos locais via Ollama
+- **🎨 Interface Elegante**: Banner LLM CLI em degradê roxo com ASCII art
+- **🔄 MCP Integrado**: Servidor MCP interno com fallback para Ollama
+- **📁 Inicialização Inteligente**: Detecta linguagem/framework automaticamente
+- **💬 Chat Interativo**: Interface conversacional com comandos especiais
+- **⚡ Seleção Intuitiva**: Navegação com setas e confirmações visuais
+- **🔒 Privacidade Total**: Tudo roda localmente, sem envio de dados
 
 ## 🎮 **Como Funciona**
 
@@ -79,67 +55,6 @@ llm chat
 # ✅ Chat funciona independente do protocolo
 ```
 
-## 🛠️ **Comandos Principais**
-
-### **Inicialização e Configuração**
-```bash
-llm init                    # Inicializa projeto com modelo automático
-llm set-default-model       # Define modelo padrão global
-llm change-model           # Troca modelo do projeto atual
-```
-
-### **Desenvolvimento Assistido**
-```bash
-llm chat                   # Chat conversacional com IA
-llm create <tipo> <nome>   # Cria funcionalidades via IA
-llm edit <arquivo> <inst>  # Edita arquivos com instruções
-llm status                 # Status do projeto e modelo
-```
-
-### **Gerenciamento de Modelos**
-```bash
-llm list-models            # Lista modelos disponíveis
-llm download <modelo>      # Baixa modelo via Ollama
-llm remove <modelo>        # Remove modelo local
-```
-
-## 🔧 **Arquitetura Inteligente**
-
-### **Sistema de Fallback**
-```
-Usuário → LLM CLI → MCP Integrado → Ollama
-                ↓ (se falhar)
-            Ollama Direto → Modelo Local
-```
-
-### **Módulos Principais**
-- **🤖 ModelManager**: Orquestra modelos com fallback automático
-- **📁 ProjectManager**: Gerenciamento inteligente de projetos
-- **💬 ConversationManager**: Interface conversacional natural
-- **🔌 MCPClient**: Cliente MCP com servidor integrado
-- **📝 FileManager**: Operações de arquivo com histórico
-
-## 🎯 **Casos de Uso**
-
-### **Desenvolvedor Iniciando Novo Projeto**
-```bash
-cd meu-projeto-nodejs
-llm init                    # Detecta Node.js, sugere modelo leve
-llm chat                    # "Crie um servidor Express básico"
-```
-
-### **Desenvolvedor em Projeto Existente**
-```bash
-cd projeto-python
-llm chat                    # "Adicione validação de dados na função X"
-```
-
-### **Equipe de Desenvolvimento**
-```bash
-llm init                    # Configura projeto para toda equipe
-llm set-default-model       # Define modelo padrão da equipe
-```
-
 ## ⚡ **Modelos Recomendados**
 
 ### **Modelos Leves e Eficientes**
@@ -157,12 +72,39 @@ llm set-default-model       # Define modelo padrão da equipe
 - `qwen2.5:7b-instruct` - Boa performance geral
 - `phi3:3.8b-instruct` - Equilibrado entre velocidade e qualidade
 
+## 🛠️ **Comandos Disponíveis**
+
+### **Inicialização e Configuração**
+```bash
+llm init                    # Inicializa projeto com modelo automático
+llm set-default-model       # Define modelo padrão global
+llm change-model           # Troca modelo do projeto atual
+```
+
+### **Chat e Interação**
+```bash
+llm chat                   # Inicia modo conversacional
+llm list-models           # Lista modelos disponíveis
+```
+
+### **Comandos do Chat** (dentro do `llm chat`)
+```bash
+/help                     # Mostra ajuda sobre comandos
+/change-model <model>     # Troca modelo durante a sessão
+/status                   # Mostra status da sessão atual
+/clear                    # Limpa histórico da conversa
+/save [nome]              # Salva conversa atual
+/load <nome>              # Carrega conversa salva
+/context                  # Mostra contexto do projeto
+/exit                     # Sai da conversa
+```
+
 ## 🔒 **Segurança e Privacidade**
 
-- **100% Local**: Nenhum dado sai da sua máquina
-- **Sem APIs Externas**: Funciona offline
-- **Controle Total**: Você escolhe os modelos e configurações
-- **Histórico Local**: Conversas ficam na sua máquina
+- **🔐 100% Local**: Nenhum dado é enviado para servidores externos
+- **🏠 Ollama Local**: Modelos rodam na sua máquina
+- **📁 Projetos Privados**: Configurações ficam na pasta do projeto
+- **🚫 Sem Telemetria**: Não coletamos dados de uso
 
 ## 🚀 **Próximos Passos**
 
@@ -171,24 +113,35 @@ llm set-default-model       # Define modelo padrão da equipe
 3. **Inicialize Projeto**: `llm init`
 4. **Comece a Conversar**: `llm chat`
 
-## 🤝 **Contribuindo**
+## 🏗️ **Arquitetura**
 
-Contribuições são bem-vindas! A CLI é open-source e aceita:
-- 🐛 Reportes de bugs
-- 💡 Sugestões de funcionalidades
-- 🔧 Pull requests
-- 📚 Melhorias na documentação
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   LLM CLI       │    │   MCP Server    │    │   Ollama        │
+│   (Interface)   │◄──►│   (Integrado)   │◄──►│   (Local LLM)   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  Project       │    │  Conversation   │    │  Model         │
+│  Manager       │    │  Manager        │    │  Manager       │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+## 🤝 **Contribuição**
+
+Contribuições são bem-vindas! Este projeto é desenvolvido para a comunidade.
+
+1. **Fork** o repositório
+2. **Crie** uma branch para sua feature
+3. **Commit** suas mudanças
+4. **Push** para a branch
+5. **Abra** um Pull Request
 
 ## 📄 **Licença**
 
-MIT License - Veja [LICENSE](LICENSE) para detalhes.
-
-## 🙏 **Agradecimentos**
-
-- **Ollama** pela infraestrutura de modelos locais
-- **Model Context Protocol** pelo padrão de comunicação
-- **Comunidade open-source** por inspiração e suporte
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
 
 ---
 
-**🎉 Transforme seu terminal em um assistente de IA inteligente e local!**
+**Desenvolvido com ❤️ para a comunidade de desenvolvedores**
