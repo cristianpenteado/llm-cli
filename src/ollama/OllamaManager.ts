@@ -13,6 +13,7 @@ export class OllamaManager {
   private readonly MODEL_LIST_CACHE_TTL = 10000; // 10 segundos
   private defaultModel = 'phi3:mini';
   private isInitialized = false;
+  private isFirstRun = true; // Adicionado para controlar a primeira execução
 
   /**
    * Inicializa o gerenciador Ollama e baixa o modelo padrão
@@ -385,6 +386,9 @@ export class OllamaManager {
         ttl: this.CACHE_TTL
       });
 
+      // Marcar que não é mais a primeira execução
+      this.isFirstRun = false;
+
       return { response: response as string };
     } catch (error) {
       Logger.error('Erro ao gerar resposta:', error);
@@ -476,11 +480,16 @@ export class OllamaManager {
         reject(error);
       });
       
-      // Timeout de 30 segundos
-      setTimeout(() => {
+      // Timeout progressivo: 60s para primeira execução, 30s para subsequentes
+      const timeout = this.isFirstRun ? 60000 : 30000;
+      const timeoutId = setTimeout(() => {
         ollamaProcess.kill('SIGTERM');
-        reject(new Error('Timeout: resposta demorou mais de 30s'));
-      }, 30000);
+        reject(new Error(`Timeout: resposta demorou mais de ${timeout/1000}s`));
+      }, timeout);
+      
+      // Limpar timeout se o processo terminar antes
+      ollamaProcess.on('close', () => clearTimeout(timeoutId));
+      ollamaProcess.on('error', () => clearTimeout(timeoutId));
     });
   }
 
@@ -595,17 +604,20 @@ export class OllamaManager {
         return; // Modelo já está ativo
       }
 
-      // Iniciar modelo em background
-      Logger.ollama(`🚀 Iniciando modelo ${modelName}...`);
+      // Pré-carregar o modelo com um prompt simples
+      Logger.ollama(`🚀 Pré-carregando modelo ${modelName}...`);
       
-      exec(`ollama run ${modelName} "test"`, (error) => {
-        if (error) {
-          Logger.warn(`Modelo ${modelName} não pôde ser iniciado:`, error.message);
-        }
-      });
-
-      // Aguardar um pouco para o modelo estar pronto
-      await this.waitForModelReady(modelName);
+      try {
+        // Usar um timeout mais longo para pré-carregamento
+        const response = await Promise.race([
+          this.callOllama(modelName, "test", ""),
+          this.timeoutPromise(90000, 'Timeout: pré-carregamento demorou mais de 90s')
+        ]);
+        
+        Logger.ollama(`✅ Modelo ${modelName} pré-carregado com sucesso`);
+      } catch (error) {
+        Logger.warn(`Modelo ${modelName} não pôde ser pré-carregado:`, error);
+      }
       
     } catch (error) {
       Logger.warn(`Erro ao garantir modelo ativo ${modelName}:`, error);
