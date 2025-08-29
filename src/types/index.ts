@@ -179,10 +179,10 @@ export interface ChatCommand {
 // Sessão de conversa
 export interface ChatSession {
   id: string;
-  model: string;
+  modelName: string;
   startTime: Date;
   messages: ChatMessage[];
-  context: ProjectContext;
+  isActive: boolean;
 }
 
 export interface ChatMessage {

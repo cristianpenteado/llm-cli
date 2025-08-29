@@ -113,335 +113,331 @@ export class ConversationManager {
   }
 
   /**
-   * Inicia a conversa com o modelo
+   * Inicia uma conversa interativa com o modelo
    */
   async startConversation(modelName: string): Promise<void> {
-    this.currentSession = {
-      id: uuidv4(),
-      model: modelName,
-      context: {
-        projectPath: process.cwd(),
-        currentFile: undefined,
-        recentFiles: [],
-        language: 'Unknown',
-        framework: 'Unknown',
-        dependencies: []
-      },
-      startTime: new Date(),
-      messages: []
-    };
+    try {
+      // Mostrar banner do chat
+      Banner.showChat();
+      
+      // Configurar sessão
+      this.currentSession = {
+        id: uuidv4(),
+        modelName,
+        messages: [],
+        startTime: new Date(),
+        isActive: true
+      };
 
-    // Mostrar banner do chat
-    Banner.showChat();
-    
-    // Mostrar informações essenciais
-    console.log(chalk.hex('#8B5CF6').bold(`🤖 Modelo: ${modelName}`));
-    console.log(chalk.hex('#A78BFA')('💡 Digite suas perguntas ou comandos. Use /help para ver comandos disponíveis.'));
-    console.log(chalk.hex('#C4B5FD')('🔄 Digite /exit para sair do chat.'));
-    console.log('\n');
-
-    // Iniciar loop de conversa
-    await this.conversationLoop();
-  }
-
-  /**
-   * Loop principal da conversa
-   */
-  private async conversationLoop(): Promise<void> {
-    const inquirer = (await import('inquirer')).default;
-    
-    while (true) {
-      try {
-        // Mostrar prompt de input com modelo
-        const { userInput } = await inquirer.prompt([
-          {
-            type: 'input',
-            name: 'userInput',
-            message: chalk.hex('#8B5CF6').bold(`[${this.currentSession?.model}] `) + chalk.hex('#A78BFA')('Digite sua mensagem:'),
-            prefix: '💬'
+      // Mostrar informações da sessão
+      this.showSessionInfo(modelName);
+      
+      // Loop principal da conversa
+      while (this.currentSession.isActive) {
+        try {
+          // Mostrar prompt intuitivo
+          const userInput = await this.getUserInput();
+          
+          if (!userInput.trim()) continue;
+          
+          // Processar comando especial
+          if (userInput.startsWith('/')) {
+            await this.processCommand(userInput);
+            continue;
           }
-        ]);
 
-        const trimmedInput = userInput.trim();
-        
-        if (trimmedInput === '') {
-          continue;
+          // Adicionar mensagem do usuário ao histórico
+          this.addUserMessage(userInput);
+          
+          // Mostrar indicador de processamento
+          this.showProcessingIndicator();
+          
+          // Processar resposta da IA
+          const response = await this.processUserInput(userInput);
+          
+          // Parar indicador de processamento
+          this.stopProcessingIndicator();
+          
+          // Adicionar resposta da IA ao histórico
+          this.addAIMessage(response);
+          
+          // Mostrar resposta formatada
+          this.showAIResponse(response);
+          
+        } catch (error) {
+          this.stopProcessingIndicator();
+          Logger.error('Erro na conversa:', error);
+          
+          // Mostrar erro de forma amigável
+          this.showError(error);
         }
-
-        // Verificar comandos especiais
-        if (trimmedInput === '/exit') {
-          console.log(chalk.hex('#8B5CF6').bold('👋 Até logo!'));
-          break;
-        }
-
-        if (trimmedInput === '/help') {
-          this.showHelp();
-          continue;
-        }
-
-        if (trimmedInput === '/clear') {
-          this.clearConversation();
-          continue;
-        }
-
-        if (trimmedInput === '/status') {
-          this.showStatus();
-          continue;
-        }
-
-        // Mostrar input do usuário
-        this.showInputSeparator(trimmedInput);
-        
-        // Processar mensagem do usuário
-        await this.processUserMessage(trimmedInput);
-        
-      } catch (error) {
-        if (error instanceof Error && error.message === 'User force closed') {
-          console.log(chalk.hex('#8B5CF6').bold('👋 Até logo!'));
-          break;
-        }
-        Logger.error('Erro no loop de conversa:', error);
-        break;
       }
-    }
-  }
-
-  /**
-   * Processa mensagem do usuário
-   */
-  private async processUserMessage(message: string): Promise<void> {
-    if (!this.currentSession) {
-      Logger.error('Nenhuma sessão ativa');
-      return;
-    }
-
-    // Adicionar mensagem do usuário
-    this.addMessage('user', message);
-
-    try {
-      // Detectar se é uma ação ou conversa
-      const isAction = this.detectActionIntent(message);
-      
-      if (isAction) {
-        // Modo agente - executar ação
-        await this.handleAsAgent(message);
-      } else {
-        // Modo conversa - resposta direta
-        await this.handleAsConversation(message);
-      }
-
-    } catch (error) {
-      Logger.error('Erro ao processar mensagem:', error);
-      this.addMessage('assistant', 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.');
-    }
-  }
-
-  /**
-   * Extrai texto da resposta do modelo (pode ser string ou array de objetos)
-   */
-  private extractResponseText(content: any): string {
-    if (typeof content === 'string') {
-      return content;
-    }
-    
-    if (Array.isArray(content)) {
-      // Se for array, extrair texto de cada item
-      return content.map(item => {
-        if (typeof item === 'string') {
-          return item;
-        }
-        if (item && typeof item === 'object' && item.text) {
-          return item.text;
-        }
-        return '';
-      }).join('\n');
-    }
-    
-    if (content && typeof content === 'object' && content.text) {
-      return content.text;
-    }
-    
-    // Fallback: converter para string
-    return String(content);
-  }
-
-  /**
-   * Detecta se a mensagem é uma ação/agente
-   */
-  private detectActionIntent(message: string): boolean {
-    const lowerMessage = message.toLowerCase();
-    
-    // Palavras-chave que indicam ação
-    const actionKeywords = [
-      'criar', 'crie', 'faça', 'implemente', 'modifique', 'altere', 'adicione', 'remova',
-      'delete', 'edite', 'escreva', 'gere', 'construa', 'desenvolva', 'programe',
-      'arquivo', 'função', 'classe', 'método', 'teste', 'config', 'setup', 'instale',
-      'adicione', 'remova', 'atualize', 'corrija', 'otimize', 'refatore', 'mova', 'renomeie'
-    ];
-    
-    return actionKeywords.some(keyword => lowerMessage.includes(keyword));
-  }
-
-  /**
-   * Processa mensagem como conversa normal
-   */
-  private async handleAsConversation(message: string): Promise<void> {
-    try {
-      // Mostrar indicador de processamento
-      this.showProcessingIndicator();
-      
-      // Enviar para o modelo via MCP (internamente)
-      const response = await this.modelManager.sendPrompt(
-        this.currentSession!.model,
-        message,
-        this.currentSession!.context
-      );
-
-      // Extrair texto da resposta (pode ser string ou array de objetos)
-      const responseText = this.extractResponseText(response.content);
-
-      // Parar indicador de processamento
-      this.stopProcessingIndicator();
-
-      // Mostrar resposta natural
-      this.showResponse(responseText);
-
-      // Adicionar resposta à sessão
-      this.addMessage('assistant', responseText);
-
-      // Processar mudanças se houver
-      if (response.changes && response.changes.length > 0) {
-        await this.processModelChanges(response.changes);
-      }
-
-      // Mostrar sugestões se houver
-      if (response.suggestions && response.suggestions.length > 0) {
-        this.showSuggestions(response.suggestions);
-      }
-
-    } catch (error) {
-      Logger.error('Erro na conversa:', error);
-      this.showErrorResponse();
-    }
-  }
-
-  /**
-   * Processa mensagem como ação/agente
-   */
-  private async handleAsAgent(message: string): Promise<void> {
-    try {
-      // Mostrar modo agente
-      this.showAgentMode(message);
-      
-      // Preparar prompt para ação
-      const actionPrompt = `Você é um assistente de programação inteligente. 
-
-INSTRUÇÕES:
-- Analise a solicitação do usuário: "${message}"
-- Identifique o que precisa ser feito
-- Execute a ação solicitada
-- Forneça explicação clara do que foi feito
-- Se for criação/modificação de código, implemente diretamente
-- Se for configuração, execute os comandos necessários
-
-Aja como um agente inteligente e execute a tarefa solicitada.`;
-
-      // Enviar para o modelo com contexto de agente
-      const response = await this.modelManager.sendPrompt(
-        this.currentSession!.model,
-        actionPrompt,
-        this.currentSession!.context
-      );
-
-      // Parar indicador de processamento
-      this.stopProcessingIndicator();
-
-      // Mostrar execução da ação
-      this.showExecutingAction();
-      
-      // Processar resposta como ação
-      await this.processAgentResponse(response, message);
-      
-      // Extrair texto da resposta
-      const responseText = this.extractResponseText(response.content);
-
-      // Adicionar resposta à sessão
-      this.addMessage('assistant', responseText);
-
-    } catch (error) {
-      Logger.error('Erro na ação:', error);
-      this.showErrorResponse();
-    }
-  }
-
-  /**
-   * Processa resposta do agente
-   */
-  private async processAgentResponse(response: any, originalMessage: string): Promise<void> {
-    try {
-      // Extrair ações da resposta (se houver)
-      if (response.changes && response.changes.length > 0) {
-        await this.processModelChanges(response.changes);
-      }
-      
-      // Extrair texto da resposta
-      const responseText = this.extractResponseText(response.content);
-
-      // Mostrar resultado da ação
-      this.showActionResult(responseText);
       
     } catch (error) {
-      Logger.error('Erro ao processar resposta do agente:', error);
-      this.showErrorResponse();
+      Logger.error('Erro ao iniciar conversa:', error);
+      throw error;
     }
   }
 
   /**
-   * Processa mudanças sugeridas pelo modelo
+   * Mostra informações da sessão de forma elegante
    */
-  private async processModelChanges(changes: any[]): Promise<void> {
-    if (changes.length === 0) return;
+  private showSessionInfo(modelName: string): void {
+    Logger.newline();
+    Logger.info('🎯 Sessão de Chat Iniciada');
+    Logger.info('═'.repeat(60));
+    Logger.info(`🤖 Modelo: ${chalk.hex('#8B5CF6')(modelName)}`);
+    Logger.info(`⏰ Iniciado em: ${new Date().toLocaleTimeString('pt-BR')}`);
+    Logger.info(`💡 Digite /help para ver comandos disponíveis`);
+    Logger.info(`🔄 Digite /exit para sair do chat`);
+    Logger.info('═'.repeat(60));
+    Logger.newline();
+  }
 
-    Logger.info('🔧 Mudanças sugeridas pelo modelo:');
-    changes.forEach((change, index) => {
-      Logger.info(`  ${index + 1}. ${change.description}`);
-    });
-
-    // Perguntar se o usuário quer aplicar as mudanças
+  /**
+   * Obtém input do usuário com interface intuitiva
+   */
+  private async getUserInput(): Promise<string> {
     const inquirer = (await import('inquirer')).default;
     
-    const { shouldApply } = await inquirer.prompt([
+    const { message } = await inquirer.prompt([
       {
-        type: 'confirm',
-        name: 'shouldApply',
-        message: '❓ Deseja aplicar essas mudanças?',
-        default: false
+        type: 'input',
+        name: 'message',
+        message: chalk.hex('#8B5CF6')('💬 Digite sua mensagem:'),
+        prefix: chalk.hex('#8B5CF6')('➤'),
+        suffix: chalk.gray('(Enter para enviar, Ctrl+C para sair)'),
+        validate: (input: string) => {
+          if (!input.trim()) {
+            return 'Por favor, digite uma mensagem';
+          }
+          return true;
+        }
       }
     ]);
     
-    if (shouldApply) {
-      Logger.info('✅ Aplicando mudanças...');
-      // Aqui você implementaria a lógica para aplicar as mudanças
-      // Por exemplo, usando o FileManager
-    } else {
-      Logger.info('❌ Mudanças não aplicadas');
+    return message.trim();
+  }
+
+
+
+  /**
+   * Adiciona mensagem do usuário ao histórico
+   */
+  private addUserMessage(content: string): void {
+    if (this.currentSession) {
+      this.currentSession.messages.push({
+        id: uuidv4(),
+        role: 'user',
+        content,
+        timestamp: new Date()
+      });
     }
   }
 
   /**
-   * Adiciona mensagem à sessão
+   * Adiciona mensagem da IA ao histórico
    */
-  private addMessage(role: 'user' | 'assistant' | 'system', content: string): void {
-    if (!this.currentSession) return;
+  private addAIMessage(content: string): void {
+    if (this.currentSession) {
+      this.currentSession.messages.push({
+        id: uuidv4(),
+        role: 'assistant',
+        content,
+        timestamp: new Date()
+      });
+    }
+  }
 
-    const message: ChatMessage = {
-      id: uuidv4(),
-      role,
-      content,
-      timestamp: new Date()
-    };
+  /**
+   * Mostra resposta da IA de forma elegante
+   */
+  private showAIResponse(response: string): void {
+    Logger.newline();
+    
+    // Cabeçalho da resposta
+    Logger.info(chalk.hex('#10B981')('🤖 Resposta da IA:'));
+    Logger.info(chalk.hex('#10B981')('─'.repeat(50)));
+    
+    // Conteúdo da resposta
+    const lines = response.split('\n');
+    lines.forEach(line => {
+      if (line.trim()) {
+        Logger.info(chalk.white(`  ${line}`));
+      }
+    });
+    
+    // Rodapé da resposta
+    Logger.info(chalk.hex('#10B981')('─'.repeat(50)));
+    Logger.info(chalk.gray(`⏰ ${new Date().toLocaleTimeString('pt-BR')}`));
+    Logger.newline();
+  }
 
-    this.currentSession.messages.push(message);
+  /**
+   * Mostra erro de forma amigável
+   */
+  private showError(error: any): void {
+    Logger.newline();
+    Logger.error(chalk.red('❌ Erro na conversa:'));
+    Logger.error(chalk.red('─'.repeat(50)));
+    Logger.error(chalk.white(`  ${error.message || error}`));
+    Logger.error(chalk.red('─'.repeat(50)));
+    Logger.info(chalk.yellow('💡 Tente novamente ou digite /help para ajuda'));
+    Logger.newline();
+  }
+
+  /**
+   * Processa input do usuário e retorna resposta da IA
+   */
+  private async processUserInput(userInput: string): Promise<string> {
+    try {
+      // Detectar tipo de input
+      const inputType = this.detectInputType(userInput);
+      
+      if (inputType === 'conversation') {
+        return await this.handleAsConversation(userInput);
+      } else {
+        return await this.handleAsAgent(userInput);
+      }
+      
+    } catch (error) {
+      Logger.error('Erro ao processar input:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Detecta o tipo de input do usuário
+   */
+  private detectInputType(input: string): 'conversation' | 'action' {
+    const actionKeywords = [
+      'crie', 'criar', 'implemente', 'implementar', 'adicione', 'adicionar',
+      'modifique', 'modificar', 'edite', 'editar', 'remova', 'remover',
+      'faça', 'fazer', 'gere', 'gerar', 'escreva', 'escrever'
+    ];
+    
+    const lowerInput = input.toLowerCase();
+    return actionKeywords.some(keyword => lowerInput.includes(keyword)) 
+      ? 'action' 
+      : 'conversation';
+  }
+
+  /**
+   * Trata input como conversa normal
+   */
+  private async handleAsConversation(userInput: string): Promise<string> {
+    try {
+      const response = await this.modelManager.sendPrompt(
+        this.currentSession!.modelName,
+        userInput
+      );
+      
+      return this.extractResponseText(response);
+      
+    } catch (error) {
+      Logger.error('Erro ao processar conversa:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trata input como ação/agente
+   */
+  private async handleAsAgent(userInput: string): Promise<string> {
+    try {
+      // Construir prompt para modo agente
+      const agentPrompt = `Você é um assistente de desenvolvimento inteligente. 
+      
+Contexto: ${this.getProjectContext()}
+
+Ação solicitada: ${userInput}
+
+Por favor, execute a ação solicitada e forneça:
+1. Explicação clara do que foi feito
+2. Código ou arquivos modificados/criados
+3. Próximos passos recomendados
+
+Seja direto e prático.`;
+
+      const response = await this.modelManager.sendPrompt(
+        this.currentSession!.modelName,
+        agentPrompt
+      );
+      
+      return this.extractResponseText(response);
+      
+    } catch (error) {
+      Logger.error('Erro ao processar ação:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extrai texto da resposta da IA
+   */
+  private extractResponseText(response: any): string {
+    if (typeof response === 'string') {
+      return response;
+    }
+    
+    if (response && typeof response === 'object') {
+      if (response.response) {
+        return response.response;
+      }
+      
+      if (response.content) {
+        if (Array.isArray(response.content)) {
+          return response.content.map((item: any) => item.text || item.content || '').join('\n');
+        }
+        
+        if (typeof response.content === 'string') {
+          return response.content;
+        }
+        
+        if (response.content.text) {
+          return response.content.text;
+        }
+      }
+    }
+    
+    return 'Resposta não pôde ser processada';
+  }
+
+  /**
+   * Obtém contexto do projeto atual
+   */
+  private getProjectContext(): string {
+    // Implementar lógica para obter contexto do projeto
+    return 'Projeto ativo detectado';
+  }
+
+  /**
+   * Processa comandos especiais
+   */
+  private async processCommand(command: string): Promise<void> {
+    const args = command.split(' ');
+    const cmd = args[0].toLowerCase();
+    
+    switch (cmd) {
+      case '/help':
+        await this.handleHelp(args.slice(1));
+        break;
+      case '/exit':
+        this.currentSession!.isActive = false;
+        Logger.info('👋 Até logo!');
+        break;
+      case '/clear':
+        this.clearConversation();
+        break;
+      case '/status':
+        this.showStatus();
+        break;
+      case '/change-model':
+        await this.handleChangeModel(args.slice(1));
+        break;
+      default:
+        Logger.warn(`❓ Comando desconhecido: ${cmd}. Digite /help para ver comandos disponíveis.`);
+    }
   }
 
   /**
@@ -515,7 +511,7 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
 
       // Atualizar modelo da sessão
       if (this.currentSession) {
-        this.currentSession.model = modelName;
+        this.currentSession.modelName = modelName;
         Logger.success(`✅ Modelo alterado para: ${modelName}`);
       }
 
@@ -535,14 +531,13 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
 
     Logger.header('Status da Sessão');
     Logger.info(`ID da Sessão: ${this.currentSession.id}`);
-    Logger.info(`Modelo: ${this.currentSession.model}`);
+    Logger.info(`Modelo: ${this.currentSession.modelName}`);
     Logger.info(`Iniciada em: ${this.currentSession.startTime.toLocaleString()}`);
     Logger.info(`Mensagens: ${this.currentSession.messages.length}`);
     
-    if (this.currentSession.context) {
-      Logger.info(`Projeto: ${this.currentSession.context.projectPath}`);
-      Logger.info(`Linguagem: ${this.currentSession.context.language}`);
-      Logger.info(`Framework: ${this.currentSession.context.framework}`);
+    if (this.currentSession) {
+      Logger.info(`Modelo: ${this.currentSession.modelName}`);
+      Logger.info(`Sessão: ${this.currentSession.id}`);
     }
   }
 
@@ -610,29 +605,16 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
    * Manipula comando de contexto
    */
   private async handleContext(args: string[]): Promise<void> {
-    if (!this.currentSession?.context) {
-      Logger.warn('❌ Nenhum contexto de projeto disponível');
+    if (!this.currentSession) {
+      Logger.warn('❌ Nenhuma sessão ativa');
       return;
     }
 
-    Logger.header('Contexto do Projeto');
-    Logger.info(`Caminho: ${this.currentSession.context.projectPath}`);
-    Logger.info(`Linguagem: ${this.currentSession.context.language}`);
-    Logger.info(`Framework: ${this.currentSession.context.framework}`);
-    
-    if (this.currentSession.context.dependencies.length > 0) {
-      Logger.info('Dependências:');
-      this.currentSession.context.dependencies.forEach(dep => {
-        Logger.info(`  - ${dep}`);
-      });
-    }
-
-    if (this.currentSession.context.recentFiles.length > 0) {
-      Logger.info('Arquivos Recentes:');
-      this.currentSession.context.recentFiles.forEach(file => {
-        Logger.info(`  - ${file}`);
-      });
-    }
+    Logger.header('Informações da Sessão');
+    Logger.info(`Modelo: ${this.currentSession.modelName}`);
+    Logger.info(`Sessão: ${this.currentSession.id}`);
+    Logger.info(`Iniciada em: ${this.currentSession.startTime.toLocaleString()}`);
+    Logger.info(`Mensagens: ${this.currentSession.messages.length}`);
   }
 
   /**
@@ -671,7 +653,7 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
 
     return {
       sessionId: this.currentSession.id,
-      model: this.currentSession.model,
+      model: this.currentSession.modelName,
       startTime: this.currentSession.startTime,
       duration: Date.now() - this.currentSession.startTime.getTime(),
       totalMessages: this.currentSession.messages.length,
@@ -831,7 +813,7 @@ Aja como um agente inteligente e execute a tarefa solicitada.`;
     if (this.currentSession) {
       console.log('\n');
       console.log(chalk.hex('#8B5CF6')('┌─ ' + chalk.bold('📊 STATUS DA SESSÃO') + ' ─' + '─'.repeat(40) + '┐'));
-      console.log(chalk.hex('#A78BFA')(`  Modelo: ${this.currentSession.model}`));
+      console.log(chalk.hex('#A78BFA')(`  Modelo: ${this.currentSession.modelName}`));
       console.log(chalk.hex('#A78BFA')(`  Sessão: ${this.currentSession.id}`));
       console.log(chalk.hex('#A78BFA')(`  Início: ${this.currentSession.startTime.toLocaleString()}`));
       console.log(chalk.hex('#A78BFA')(`  Mensagens: ${this.currentSession.messages.length}`));
