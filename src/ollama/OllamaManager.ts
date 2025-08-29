@@ -63,27 +63,35 @@ export class OllamaManager {
    */
   private async checkOllamaServer(): Promise<void> {
     try {
+      // Tentar listar modelos para verificar se o servidor está respondendo
       const { stdout } = await execAsync('ollama list --json');
       Logger.ollama('✅ Servidor Ollama está rodando');
     } catch (error) {
-      Logger.warn('⚠️ Servidor Ollama não está rodando');
-      Logger.info('🚀 Iniciando servidor Ollama...');
+      Logger.warn('⚠️ Servidor Ollama não está respondendo, verificando status...');
       
       try {
-        // Iniciar servidor Ollama em background
-        exec('ollama serve', (error) => {
-          if (error) {
-            Logger.warn('⚠️ Erro ao iniciar servidor Ollama:', error.message);
-          }
-        });
-        
-        // Aguardar servidor estar pronto
-        await this.waitForServerReady();
+        // Tentar iniciar servidor Ollama
+        const { stdout, stderr } = await execAsync('ollama serve', { timeout: 5000 });
         Logger.success('✅ Servidor Ollama iniciado');
         
-      } catch (startError) {
-        Logger.error('❌ Erro ao iniciar servidor Ollama:', startError);
-        throw new Error('Falha ao iniciar servidor Ollama. Execute manualmente: ollama serve');
+      } catch (startError: any) {
+        // Verificar se o erro é de porta em uso (Ollama já está rodando)
+        if (startError.stderr && startError.stderr.includes('address already in use')) {
+          Logger.ollama('✅ Porta 11434 em uso - Ollama já está rodando em background');
+          // Aguardar um pouco para o servidor estar pronto
+          await this.waitForServerReady();
+          return;
+        }
+        
+        // Se não for erro de porta em uso, tentar verificar se o servidor já está rodando
+        try {
+          await this.waitForServerReady();
+          Logger.ollama('✅ Servidor Ollama já estava rodando');
+          return;
+        } catch (waitError) {
+          Logger.error('❌ Erro ao iniciar servidor Ollama:', startError);
+          throw new Error('Falha ao iniciar servidor Ollama. Execute manualmente: ollama serve');
+        }
       }
     }
   }
