@@ -27,8 +27,8 @@ export class OllamaManager {
   /**
    * Inicializa o gerenciador Ollama
    */
-  async initialize(): Promise<void> {
-    if (this.isInitialized) {
+  async initialize(specificModel?: string): Promise<void> {
+    if (this.isInitialized && !specificModel) {
       return;
     }
 
@@ -41,14 +41,29 @@ export class OllamaManager {
       // Verificar servidor
       await this.checkOllamaServer();
 
-      // Garantir modelo padrão
-      await this.ensureDefaultModel();
+      // Determinar qual modelo usar
+      const modelToUse = specificModel || this.defaultModel;
+      
+      if (this.verboseLogs) {
+        Logger.ollama(`🔍 [LOGS] Inicializando com modelo: ${modelToUse}`);
+      }
+
+      // Garantir que o modelo está disponível
+      await this.ensureModelAvailable(modelToUse);
+
+      // Parar processo persistente anterior se existir
+      if (this.persistentModelProcess) {
+        if (this.verboseLogs) {
+          Logger.ollama(`🔄 [LOGS] Parando processo persistente anterior`);
+        }
+        await this.stopModelSession();
+      }
 
       // Iniciar modelo em background automaticamente (não-bloqueante)
-      this.startModelInBackgroundAsync(this.defaultModel);
+      this.startModelInBackgroundAsync(modelToUse);
 
       this.isInitialized = true;
-      Logger.success('✅ Gerenciador Ollama inicializado com modelo padrão');
+      Logger.success(`✅ Gerenciador Ollama inicializado com modelo: ${modelToUse}`);
 
     } catch (error) {
       Logger.error('Erro ao inicializar gerenciador Ollama:', error);

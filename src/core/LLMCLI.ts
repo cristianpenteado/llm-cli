@@ -138,7 +138,7 @@ export class LLMCLI {
       await this.projectManager.updateProjectModel(this.currentProject.path, modelName);
 
       // Iniciar novo modelo
-      await this.ollamaManager.initialize();
+      await this.ollamaManager.initialize(modelName);
 
       Logger.success(`✅ Modelo alterado para: ${modelName}`);
       Logger.info(`💡 Use "llm chat" para iniciar uma conversa com o novo modelo`);
