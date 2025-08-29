@@ -11,7 +11,7 @@ export class OllamaManager {
   private lastModelList = 0;
   private readonly CACHE_TTL = 30000; // 30 segundos
   private readonly MODEL_LIST_CACHE_TTL = 10000; // 10 segundos
-  private readonly DEFAULT_MODEL = 'phi3:mini';
+  private defaultModel = 'phi3:mini';
   private isInitialized = false;
 
   /**
@@ -126,44 +126,211 @@ export class OllamaManager {
   private async ensureDefaultModel(): Promise<void> {
     try {
       const models = await this.listModels();
-      const defaultModel = models.find(m => m.name === this.DEFAULT_MODEL);
+      const defaultModel = models.find(m => m.name === this.defaultModel);
       
       if (defaultModel) {
-        Logger.ollama(`✅ Modelo padrão ${this.DEFAULT_MODEL} já está disponível`);
+        Logger.ollama(`✅ Modelo padrão ${this.defaultModel} já está disponível`);
         return;
       }
       
-      Logger.ollama(`📥 Baixando modelo padrão ${this.DEFAULT_MODEL}...`);
-      await this.downloadModel(this.DEFAULT_MODEL);
-      Logger.success(`✅ Modelo padrão ${this.DEFAULT_MODEL} baixado com sucesso`);
+      // Perguntar ao usuário se quer baixar o modelo padrão
+      const shouldDownload = await this.askUserToDownloadDefault();
+      
+      if (shouldDownload) {
+        Logger.ollama(`📥 Baixando modelo padrão ${this.defaultModel}...`);
+        await this.downloadModelWithProgress(this.defaultModel);
+        Logger.success(`✅ Modelo padrão ${this.defaultModel} baixado com sucesso`);
+      } else {
+        // Permitir que o usuário escolha outro modelo
+        const selectedModel = await this.selectModelInteractively();
+        if (selectedModel) {
+          Logger.ollama(`✅ Usando modelo selecionado: ${selectedModel}`);
+          // Atualizar modelo padrão
+          this.defaultModel = selectedModel;
+        } else {
+          throw new Error('Nenhum modelo selecionado. É necessário ter pelo menos um modelo disponível.');
+        }
+      }
       
     } catch (error) {
-      Logger.error(`Erro ao baixar modelo padrão ${this.DEFAULT_MODEL}:`, error);
+      Logger.error(`Erro ao garantir modelo padrão ${this.defaultModel}:`, error);
       throw error;
     }
   }
 
   /**
-   * Faz download de um modelo
+   * Pergunta ao usuário se quer baixar o modelo padrão
    */
-  async downloadModel(modelName: string): Promise<void> {
+  private async askUserToDownloadDefault(): Promise<boolean> {
     try {
-      Logger.ollama(`📥 Fazendo download do modelo ${modelName}...`);
+      const inquirer = (await import('inquirer')).default;
       
-      // Usar o comando ollama pull com timeout
-      const result = await Promise.race([
-        execAsync(`ollama pull ${modelName}`),
-        this.timeoutPromise(300000, `Timeout: download do modelo ${modelName} demorou mais de 5 minutos`) // 5 min
-      ]) as { stdout: string; stderr: string };
-      
-      if (result.stderr && !result.stderr.includes('pulling')) {
-        throw new Error(result.stderr);
+      const { action } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'action',
+          message: `Modelo padrão ${this.defaultModel} não encontrado. O que você gostaria de fazer?`,
+          choices: [
+            { name: `📥 Baixar ${this.defaultModel} (recomendado)`, value: 'download' },
+            { name: '🤖 Escolher outro modelo disponível', value: 'select' },
+            { name: '❌ Cancelar', value: 'cancel' }
+          ],
+          default: 'download'
+        }
+      ]);
+
+      if (action === 'cancel') {
+        throw new Error('Operação cancelada pelo usuário');
       }
+
+      return action === 'download';
+    } catch (error) {
+      // Se inquirer falhar, usar fallback
+      Logger.info(`Modelo padrão ${this.defaultModel} não encontrado.`);
+      Logger.info('Para baixar manualmente, execute: ollama pull phi3:mini');
+      return false;
+    }
+  }
+
+  /**
+   * Permite ao usuário escolher um modelo interativamente
+   */
+  private async selectModelInteractively(): Promise<string | null> {
+    try {
+      const inquirer = (await import('inquirer')).default;
       
-      Logger.ollama(`✅ Download do modelo ${modelName} concluído`);
+      // Listar modelos disponíveis
+      const availableModels = await this.listAvailableModels();
       
-      // Limpar cache de modelos para refletir a mudança
-      this.modelCache.clear();
+      if (availableModels.length === 0) {
+        Logger.warn('⚠️ Nenhum modelo disponível. Baixando modelo padrão...');
+        await this.downloadModelWithProgress(this.defaultModel);
+        return this.defaultModel;
+      }
+
+      const { selectedModel } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'selectedModel',
+          message: 'Escolha um modelo para usar:',
+          choices: [
+            ...availableModels.map(model => ({
+              name: `${model} (recomendado)`,
+              value: model
+            })),
+            { name: '📥 Baixar novo modelo', value: 'download_new' }
+          ]
+        }
+      ]);
+
+      if (selectedModel === 'download_new') {
+        const { newModelName } = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'newModelName',
+            message: 'Digite o nome do modelo para baixar (ex: llama3.2:3b):',
+            default: 'llama3.2:3b'
+          }
+        ]);
+
+        if (newModelName.trim()) {
+          Logger.ollama(`📥 Baixando modelo ${newModelName}...`);
+          await this.downloadModelWithProgress(newModelName.trim());
+          return newModelName.trim();
+        }
+      }
+
+      return selectedModel;
+    } catch (error) {
+      Logger.error('Erro ao selecionar modelo:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Lista modelos disponíveis para download
+   */
+  private async listAvailableModels(): Promise<string[]> {
+    try {
+      // Modelos populares e leves
+      return [
+        'phi3:mini',
+        'llama3.2:3b',
+        'mistral:7b',
+        'gemma2:2b',
+        'qwen2.5:0.5b',
+        'codellama:7b'
+      ];
+    } catch (error) {
+      return ['phi3:mini']; // Fallback
+    }
+  }
+
+  /**
+   * Faz download de um modelo com progresso visual
+   */
+  async downloadModelWithProgress(modelName: string): Promise<void> {
+    try {
+      Logger.ollama(`📥 Iniciando download do modelo ${modelName}...`);
+      
+      // Usar spawn para capturar output em tempo real
+      const { spawn } = await import('child_process');
+      
+      return new Promise((resolve, reject) => {
+        const ollamaProcess = spawn('ollama', ['pull', modelName]);
+        
+        let output = '';
+        let lastProgress = '';
+        
+        ollamaProcess.stdout.on('data', (data) => {
+          const text = data.toString();
+          output += text;
+          
+          // Mostrar progresso em tempo real
+          if (text.includes('pulling')) {
+            const progressMatch = text.match(/(\d+\.?\d*)%/);
+            if (progressMatch && progressMatch[1] !== lastProgress) {
+              lastProgress = progressMatch[1];
+              process.stdout.write(`\r📥 Download: ${lastProgress}%`);
+            }
+          }
+        });
+        
+        ollamaProcess.stderr.on('data', (data) => {
+          const text = data.toString();
+          if (text.includes('pulling')) {
+            // Mostrar progresso do stderr também
+            const progressMatch = text.match(/(\d+\.?\d*)%/);
+            if (progressMatch && progressMatch[1] !== lastProgress) {
+              lastProgress = progressMatch[1];
+              process.stdout.write(`\r📥 Download: ${lastProgress}%`);
+            }
+          }
+        });
+        
+        ollamaProcess.on('close', (code) => {
+          process.stdout.write('\n'); // Nova linha após progresso
+          
+          if (code === 0) {
+            Logger.ollama(`✅ Download do modelo ${modelName} concluído`);
+            // Limpar cache de modelos para refletir a mudança
+            this.modelCache.clear();
+            resolve();
+          } else {
+            reject(new Error(`Download falhou com código ${code}`));
+          }
+        });
+        
+        ollamaProcess.on('error', (error) => {
+          reject(error);
+        });
+        
+        // Timeout de 10 minutos
+        setTimeout(() => {
+          ollamaProcess.kill();
+          reject(new Error('Timeout: download demorou mais de 10 minutos'));
+        }, 600000);
+      });
       
     } catch (error) {
       Logger.error(`Erro ao fazer download do modelo ${modelName}:`, error);
@@ -223,9 +390,9 @@ export class OllamaManager {
     const model = models.find(m => m.name === modelName);
     
     if (!model) {
-      if (modelName === this.DEFAULT_MODEL) {
+      if (modelName === this.defaultModel) {
         // Para o modelo padrão, sempre tentar baixar
-        await this.downloadModel(modelName);
+        await this.downloadModelWithProgress(modelName);
       } else {
         // Para outros modelos, informar que precisa baixar
         throw new Error(`Modelo ${modelName} não encontrado. Use "ollama pull ${modelName}" para baixá-lo.`);
@@ -394,6 +561,6 @@ export class OllamaManager {
    * Obtém o modelo padrão
    */
   getDefaultModel(): string {
-    return this.DEFAULT_MODEL;
+    return this.defaultModel;
   }
 }
