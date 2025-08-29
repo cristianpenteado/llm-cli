@@ -6,6 +6,7 @@ import { Banner } from '../utils/Banner';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import chalk from 'chalk';
 
 export class ConversationManager {
   private modelManager: ModelManager;
@@ -150,14 +151,23 @@ export class ConversationManager {
   private async conversationLoop(): Promise<void> {
     const inquirer = (await import('inquirer')).default;
     
+    // Mostrar instruções iniciais
+    this.showChatInstructions();
+    
     while (true) {
       try {
+        // Criar uma interface mais elegante para o input
         const { userInput } = await inquirer.prompt([
           {
             type: 'input',
             name: 'userInput',
-            message: '🤖 >',
-            prefix: ''
+            message: '',
+            prefix: '',
+            suffix: '',
+            transformer: (input: string) => {
+              // Destacar o input do usuário
+              return chalk.hex('#8B5CF6').bold(`🤖 ${input}`);
+            }
           }
         ]);
 
@@ -167,6 +177,9 @@ export class ConversationManager {
           continue;
         }
 
+        // Mostrar separador visual
+        this.showInputSeparator(trimmedInput);
+
         // Verificar se é um comando
         if (trimmedInput.startsWith('/')) {
           await this.handleCommand(trimmedInput);
@@ -174,6 +187,10 @@ export class ConversationManager {
           // Processar mensagem do usuário
           await this.processUserMessage(trimmedInput);
         }
+
+        // Mostrar separador após resposta
+        this.showResponseSeparator();
+        
       } catch (error) {
         Logger.error('Erro ao processar entrada:', error);
       }
@@ -505,5 +522,37 @@ export class ConversationManager {
       assistantMessages,
       systemMessages
     };
+  }
+
+  /**
+   * Mostra separador visual para a resposta
+   */
+  private showResponseSeparator(): void {
+    console.log('\n');
+    console.log(chalk.hex('#8B5CF6')('┌─ ' + chalk.bold('ASSISTENTE') + ' ─' + '─'.repeat(50) + '┐'));
+  }
+
+  /**
+   * Mostra instruções iniciais do chat
+   */
+  private showChatInstructions(): void {
+    console.log('\n');
+    console.log(chalk.hex('#8B5CF6').bold('╔══════════════════════════════════════════════════════════════╗'));
+    console.log(chalk.hex('#A78BFA').bold('║                        💬 CHAT ATIVO                         ║'));
+    console.log(chalk.hex('#C4B5FD').bold('║              Digite suas perguntas ou use /help               ║'));
+    console.log(chalk.hex('#DDD6FE').bold('║              Desenvolvido para a comunidade ❤️               ║'));
+    console.log(chalk.hex('#EDE9FE').bold('╚══════════════════════════════════════════════════════════════╝'));
+    console.log('\n');
+  }
+
+  /**
+   * Mostra separador visual para o input do usuário
+   */
+  private showInputSeparator(input: string): void {
+    console.log('\n');
+    console.log(chalk.hex('#8B5CF6')('┌─ ' + chalk.bold('USUÁRIO') + ' ─' + '─'.repeat(Math.max(0, 60 - input.length)) + '┐'));
+    console.log(chalk.hex('#A78BFA')(`│ ${chalk.white(input)}${' '.repeat(Math.max(0, 58 - input.length))} │`));
+    console.log(chalk.hex('#C4B5FD')('└' + '─'.repeat(62) + '┘'));
+    console.log('\n');
   }
 }

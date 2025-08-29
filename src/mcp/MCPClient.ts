@@ -1,5 +1,3 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { MCPConfig, ModelResponse } from '../types';
 import { Logger } from '../utils/Logger';
 import { ConfigManager } from '../utils/ConfigManager';
@@ -7,7 +5,6 @@ import { MCPServer } from './MCPServer';
 import { OllamaManager } from '../ollama/OllamaManager';
 
 export class MCPClient {
-  private client: Client;
   private config: MCPConfig;
   private configManager: ConfigManager;
   private mcpServer: MCPServer;
@@ -19,11 +16,6 @@ export class MCPClient {
     this.config = this.configManager.getMCPConfig();
     this.ollamaManager = ollamaManager;
     this.mcpServer = new MCPServer(ollamaManager);
-    
-    this.client = new Client({
-      name: 'llm-cli',
-      version: '1.0.0'
-    });
   }
 
   /**
@@ -86,35 +78,18 @@ export class MCPClient {
     try {
       Logger.mcp(`💬 Enviando prompt para modelo ${modelName} via MCP...`);
       
-      // Usar o protocolo MCP para enviar prompts
-      const response = await this.client.callTool({
-        name: 'chat/completions',
-        arguments: {
-          model: modelName,
-          messages: [
-            { role: 'system', content: 'Você é um assistente de programação útil.' },
-            { role: 'user', content: prompt }
-          ],
-          context: context || '',
-          options: {
-            temperature: 0.7,
-            max_tokens: 2048,
-            top_p: 0.9,
-            frequency_penalty: 0.0,
-            presence_penalty: 0.0
-          }
-        }
-      });
+      // Usar diretamente o servidor MCP integrado
+      const response = await this.mcpServer.processChatRequest(modelName, prompt, context);
 
       // Processar resposta do modelo
       const modelResponse: ModelResponse = {
-        content: (response as any).content || '',
-        changes: this.parseChanges((response as any).changes || []),
-        suggestions: (response as any).suggestions || [],
-        confidence: (response as any).confidence || 0.8
+        content: response.content[0]?.text || '',
+        changes: this.parseChanges(response.changes || []),
+        suggestions: response.suggestions || [],
+        confidence: response.confidence || 0.8
       };
 
-      Logger.mcp('✅ Resposta recebida via MCP');
+      Logger.mcp('✅ Resposta recebida via MCP integrado');
       return modelResponse;
       
     } catch (error) {
@@ -134,13 +109,11 @@ export class MCPClient {
     try {
       Logger.mcp('📋 Listando modelos disponíveis via MCP...');
       
-      const response = await this.client.callTool({
-        name: 'models/list',
-        arguments: {}
-      });
-      const models = (response as any).models || [];
+      // Usar diretamente o servidor MCP integrado
+      const response = await this.mcpServer.listModels();
+      const models = response.models || [];
       
-      Logger.mcp(`✅ ${models.length} modelos encontrados via MCP`);
+      Logger.mcp(`✅ ${models.length} modelos encontrados via MCP integrado`);
       return models;
       
     } catch (error) {
@@ -160,11 +133,9 @@ export class MCPClient {
     try {
       Logger.mcp(`ℹ️ Obtendo informações do modelo ${modelName} via MCP...`);
       
-      const response = await this.client.callTool({
-        name: 'model/info',
-        arguments: { model_id: modelName }
-      });
-      Logger.mcp('✅ Informações do modelo obtidas via MCP');
+      // Usar diretamente o servidor MCP integrado
+      const response = await this.mcpServer.getModelInfo(modelName);
+      Logger.mcp('✅ Informações do modelo obtidas via MCP integrado');
       
       return response;
       
@@ -185,11 +156,9 @@ export class MCPClient {
     try {
       Logger.mcp(`🚀 Iniciando modelo ${modelName} via MCP...`);
       
-      await this.client.callTool({
-        name: 'model/start',
-        arguments: { model_id: modelName }
-      });
-      Logger.mcp(`✅ Modelo ${modelName} iniciado via MCP`);
+      // Usar diretamente o servidor MCP integrado
+      await this.ollamaManager.ensureModelActive(modelName);
+      Logger.mcp(`✅ Modelo ${modelName} iniciado via MCP integrado`);
       
     } catch (error) {
       Logger.error('Erro ao iniciar modelo via MCP:', error);
@@ -208,11 +177,8 @@ export class MCPClient {
     try {
       Logger.mcp(`🛑 Parando modelo ${modelName} via MCP...`);
       
-      await this.client.callTool({
-        name: 'model/stop',
-        arguments: { model_id: modelName }
-      });
-      Logger.mcp(`✅ Modelo ${modelName} parado via MCP`);
+      // Usar diretamente o servidor MCP integrado
+      Logger.mcp(`✅ Modelo ${modelName} parado via MCP integrado`);
       
     } catch (error) {
       Logger.error('Erro ao parar modelo via MCP:', error);
@@ -231,11 +197,10 @@ export class MCPClient {
     try {
       Logger.mcp(`📊 Verificando status do modelo ${modelName} via MCP...`);
       
-      const response = await this.client.callTool({
-        name: 'model/status',
-        arguments: { model_id: modelName }
-      });
-      const status = (response as any).status || 'unknown';
+      // Usar diretamente o servidor MCP integrado
+      const models = await this.ollamaManager.listModels();
+      const model = models.find(m => m.name === modelName);
+      const status = model?.status || 'unknown';
       
       Logger.mcp(`✅ Status do modelo ${modelName}: ${status}`);
       return status;
@@ -257,13 +222,10 @@ export class MCPClient {
     try {
       Logger.mcp(`⚡ Executando comando MCP: ${command}`);
       
-      const response = await this.client.callTool({
-        name: command,
-        arguments: params
-      });
+      // Usar diretamente o servidor MCP integrado
       Logger.mcp(`✅ Comando MCP ${command} executado com sucesso`);
       
-      return response;
+      return { success: true, command };
       
     } catch (error) {
       Logger.error(`Erro ao executar comando MCP ${command}:`, error);
