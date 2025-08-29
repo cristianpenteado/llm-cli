@@ -64,7 +64,7 @@ export class OllamaManager {
   private async checkOllamaServer(): Promise<void> {
     try {
       // Tentar listar modelos para verificar se o servidor está respondendo
-      const { stdout } = await execAsync('ollama list --json');
+      const { stdout } = await execAsync('ollama list');
       Logger.ollama('✅ Servidor Ollama está rodando');
     } catch (error) {
       Logger.warn('⚠️ Servidor Ollama não está respondendo, verificando status...');
@@ -124,13 +124,23 @@ export class OllamaManager {
    */
   private async ensureDefaultModel(): Promise<void> {
     try {
+      Logger.ollama(`🔍 Verificando se modelo padrão ${this.defaultModel} está disponível...`);
+      
       const models = await this.listModels();
+      Logger.ollama(`📋 Modelos encontrados: ${models.length}`);
+      
+      if (models.length > 0) {
+        Logger.ollama(`📝 Modelos: ${models.map(m => m.name).join(', ')}`);
+      }
+      
       const defaultModel = models.find(m => m.name === this.defaultModel);
       
       if (defaultModel) {
         Logger.ollama(`✅ Modelo padrão ${this.defaultModel} já está disponível`);
         return;
       }
+      
+      Logger.ollama(`❌ Modelo padrão ${this.defaultModel} não encontrado. Mostrando seletor...`);
       
       // Perguntar ao usuário se quer baixar o modelo padrão
       const shouldDownload = await this.askUserToDownloadDefault();
@@ -140,6 +150,7 @@ export class OllamaManager {
         await this.downloadModelWithProgress(this.defaultModel);
         Logger.success(`✅ Modelo padrão ${this.defaultModel} baixado com sucesso`);
       } else {
+        Logger.ollama(`🤖 Usuário escolheu selecionar outro modelo...`);
         // Permitir que o usuário escolha outro modelo
         const selectedModel = await this.selectModelInteractively();
         if (selectedModel) {
