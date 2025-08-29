@@ -848,8 +848,27 @@ export class OllamaManager {
       // Tentar usar o processo persistente primeiro para resposta imediata
       if (this.persistentModelProcess && this.persistentModelProcess.pid) {
         try {
-          return await this.sendToPersistentProcess(fullPrompt);
+          if (this.verboseLogs) {
+            Logger.ollama(`🔍 [LOGS] Tentando processo persistente primeiro...`);
+          }
+          
+          // Timeout reduzido para 8 segundos
+          const response = await Promise.race([
+            this.sendToPersistentProcess(fullPrompt),
+            new Promise<string>((_, reject) => 
+              setTimeout(() => reject(new Error('Processo persistente lento')), 8000)
+            )
+          ]);
+          
+          if (this.verboseLogs) {
+            Logger.ollama(`✅ [LOGS] Resposta do processo persistente: "${response}"`);
+          }
+          
+          return response;
         } catch (persistentError) {
+          if (this.verboseLogs) {
+            Logger.ollama(`⚠️ [LOGS] Processo persistente falhou: ${persistentError}`);
+          }
           Logger.warn('Processo persistente falhou, usando fallback...');
         }
       }
