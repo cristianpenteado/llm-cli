@@ -41,11 +41,8 @@ export class OllamaManager {
       // Garantir modelo padrão
       await this.ensureDefaultModel();
 
-      // Pré-carregar o modelo para evitar delay na primeira execução
-      await this.preloadModel(this.defaultModel);
-
-      // Iniciar modelo em background automaticamente
-      await this.startModelInBackground(this.defaultModel);
+      // Iniciar modelo em background automaticamente (não-bloqueante)
+      this.startModelInBackgroundAsync(this.defaultModel);
 
       this.isInitialized = true;
       Logger.success('✅ Gerenciador Ollama inicializado com modelo padrão');
@@ -589,59 +586,35 @@ export class OllamaManager {
     }
   }
 
-  /**
-   * Pré-carrega o modelo para evitar delay na primeira execução
-   */
-  private async preloadModel(modelName: string): Promise<void> {
-    try {
-      Logger.ollama(`🔄 Pré-carregando modelo ${modelName}...`);
-      
-      // Usar exec para pré-carregar com timeout mais longo
-      const { exec } = await import('child_process');
-      const { promisify } = await import('util');
-      const execAsync = promisify(exec);
-      
-      const command = `ollama run ${modelName} "test"`;
-      
-      // Timeout de 3 minutos para pré-carregamento
-      await execAsync(command, {
-        timeout: 180000, // 3 minutos
-        maxBuffer: 1024 * 1024
-      });
-      
-      Logger.ollama(`✅ Modelo ${modelName} pré-carregado com sucesso`);
-      
-    } catch (error) {
-      Logger.warn(`Pré-carregamento do modelo ${modelName} falhou:`, error);
-      // Não falhar se pré-carregamento falhar
-    }
-  }
+
 
   /**
-   * Inicia o modelo em background automaticamente
+   * Inicia o modelo em background automaticamente (não-bloqueante)
    */
-  private async startModelInBackground(modelName: string): Promise<void> {
-    try {
-      // Parar processo anterior se existir
-      if (this.backgroundProcess) {
-        this.backgroundProcess.kill('SIGTERM');
-        this.backgroundProcess = null;
+  private startModelInBackgroundAsync(modelName: string): void {
+    // Executar em background sem bloquear
+    setImmediate(async () => {
+      try {
+        // Parar processo anterior se existir
+        if (this.backgroundProcess) {
+          this.backgroundProcess.kill('SIGTERM');
+          this.backgroundProcess = null;
+        }
+
+        // Iniciar modelo em background sem mostrar output
+        const { spawn } = await import('child_process');
+        
+        this.backgroundProcess = spawn('ollama', ['run', modelName], {
+          stdio: ['pipe', 'ignore', 'ignore'], // Ignorar stdout e stderr
+          detached: true // Processo independente
+        });
+
+        Logger.ollama(`✅ Modelo ${modelName} iniciado em background`);
+        
+      } catch (error) {
+        Logger.warn(`Modelo ${modelName} não pôde ser iniciado em background:`, error);
       }
-
-      // Iniciar modelo em background sem mostrar output
-      const { spawn } = await import('child_process');
-      
-      this.backgroundProcess = spawn('ollama', ['run', modelName], {
-        stdio: ['pipe', 'ignore', 'ignore'], // Ignorar stdout e stderr
-        detached: true // Processo independente
-      });
-
-      // Aguardar um pouco para o modelo estar pronto
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-    } catch (error) {
-      Logger.warn(`Modelo ${modelName} não pôde ser iniciado em background:`, error);
-    }
+    });
   }
 
   /**
