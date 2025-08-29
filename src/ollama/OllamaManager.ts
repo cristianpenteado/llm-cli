@@ -445,14 +445,43 @@ export class OllamaManager {
       fullPrompt = `${context}\n\nPergunta: ${prompt}`;
     }
     
-    const command = `ollama run ${modelName} "${fullPrompt.replace(/"/g, '\\"')}"`;
+    Logger.ollama(`🤖 Enviando prompt para ${modelName}...`);
     
-    const { stdout } = await execAsync(command, {
-      timeout: 25000, // 25s timeout
-      maxBuffer: 1024 * 1024 // 1MB buffer
+    // Usar spawn para melhor controle do processo
+    const { spawn } = await import('child_process');
+    
+    return new Promise((resolve, reject) => {
+      const ollamaProcess = spawn('ollama', ['run', modelName, fullPrompt]);
+      
+      let stdout = '';
+      let stderr = '';
+      
+      ollamaProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      ollamaProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      ollamaProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve(stdout.trim());
+        } else {
+          reject(new Error(`Ollama process exited with code ${code}. Stderr: ${stderr}`));
+        }
+      });
+      
+      ollamaProcess.on('error', (error) => {
+        reject(error);
+      });
+      
+      // Timeout de 30 segundos
+      setTimeout(() => {
+        ollamaProcess.kill('SIGTERM');
+        reject(new Error('Timeout: resposta demorou mais de 30s'));
+      }, 30000);
     });
-
-    return stdout.trim();
   }
 
   /**
