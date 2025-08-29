@@ -15,6 +15,7 @@ export class OllamaManager {
   private isInitialized = false;
   private isFirstRun = true; // Adicionado para controlar a primeira execução
   private activeSession: any = null; // Sessão ativa com o modelo
+  private backgroundProcess: any = null; // Processo em background
 
   constructor() {
     // Inicializar cache limpo
@@ -39,6 +40,9 @@ export class OllamaManager {
       
       // Baixar modelo padrão se não existir
       await this.ensureDefaultModel();
+      
+      // Iniciar modelo em background automaticamente
+      await this.startModelInBackground(this.defaultModel);
       
       this.isInitialized = true;
       Logger.success('✅ Gerenciador Ollama inicializado com modelo padrão');
@@ -583,6 +587,61 @@ export class OllamaManager {
   }
 
   /**
+   * Inicia o modelo em background automaticamente
+   */
+  private async startModelInBackground(modelName: string): Promise<void> {
+    try {
+      // Parar processo anterior se existir
+      if (this.backgroundProcess) {
+        this.backgroundProcess.kill('SIGTERM');
+        this.backgroundProcess = null;
+      }
+
+      // Iniciar modelo em background sem mostrar output
+      const { spawn } = await import('child_process');
+      
+      this.backgroundProcess = spawn('ollama', ['run', modelName], {
+        stdio: ['pipe', 'ignore', 'ignore'], // Ignorar stdout e stderr
+        detached: true // Processo independente
+      });
+
+      // Aguardar um pouco para o modelo estar pronto
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+    } catch (error) {
+      Logger.warn(`Modelo ${modelName} não pôde ser iniciado em background:`, error);
+    }
+  }
+
+  /**
+   * Envia prompt para o processo em background
+   */
+  private async sendToBackgroundProcess(prompt: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.backgroundProcess || !this.backgroundProcess.pid) {
+        reject(new Error('Processo em background não está disponível'));
+        return;
+      }
+
+      // Usar exec para enviar prompt ao modelo em background
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      
+      const command = `ollama run ${this.activeSession.modelName} "${prompt.replace(/"/g, '\\"')}"`;
+      
+      execAsync(command, {
+        timeout: 60000,
+        maxBuffer: 1024 * 1024
+      }).then(({ stdout }: any) => {
+        resolve(stdout.trim());
+      }).catch((error: any) => {
+        reject(error);
+      });
+    });
+  }
+
+  /**
    * Inicia uma sessão contínua com o modelo
    */
   async startModelSession(modelName: string): Promise<void> {
@@ -656,7 +715,12 @@ export class OllamaManager {
         fullPrompt = `${context}\n\nPergunta: ${prompt}`;
       }
       
-      // Usar exec diretamente para compatibilidade com versões antigas
+      // Usar o processo em background se disponível
+      if (this.backgroundProcess && this.backgroundProcess.pid) {
+        return await this.sendToBackgroundProcess(fullPrompt);
+      }
+      
+      // Fallback: usar exec diretamente
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
