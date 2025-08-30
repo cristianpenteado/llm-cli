@@ -45,17 +45,17 @@ export class FileConfigurationRepository implements ConfigurationRepository {
   getDefault(): Configuration {
     return {
       model: {
-        defaultModel: 'llama3.2',
-        temperature: 0.7,
-        maxTokens: 4096,
+        defaultModel: 'phi3:mini',
+        temperature: 0.3,
+        maxTokens: 2048,
         systemPrompt: undefined,
-        fallbackModels: ['llama3.2:1b', 'qwen2.5:7b']
+        fallbackModels: ['deepseek-coder:6.7b', 'codellama:13b']
       },
       agent: {
-        name: 'Claude Code Assistant',
+        name: 'Dev Assistant',
         personality: 'helpful',
         autoConfirm: false,
-        maxPlanSteps: 10,
+        maxPlanSteps: 12,
         contextWindow: 8192
       },
       cli: {
@@ -67,9 +67,9 @@ export class FileConfigurationRepository implements ConfigurationRepository {
       ollama: {
         host: 'localhost',
         port: 11434,
-        timeout: 30000,
-        retryAttempts: 3,
-        keepAlive: '5m'
+        timeout: 60000,
+        retryAttempts: 1,
+        keepAlive: '2m'
       }
     };
   }
