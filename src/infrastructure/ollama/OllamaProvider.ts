@@ -1,13 +1,12 @@
 import { ModelProvider, ModelInfo, GenerationRequest, GenerationResponse } from '../../domain/communication/ModelProvider';
 import { OllamaConfiguration } from '../../domain/configuration/Configuration';
-import { Logger } from '../../application/ports/Logger';
 
 export class OllamaProvider implements ModelProvider {
   private baseUrl: string;
+  private activeSessions: Map<string, any> = new Map();
 
   constructor(
-    private config: OllamaConfiguration,
-    private logger: Logger
+    private config: OllamaConfiguration
   ) {
     this.baseUrl = `http://${config.host}:${config.port}`;
   }
@@ -26,7 +25,6 @@ export class OllamaProvider implements ModelProvider {
         digest: model.digest
       }));
     } catch (error) {
-      this.logger.error('Failed to list models', { error });
       throw new Error(`Falha ao listar modelos: ${error}`);
     }
   }
@@ -58,7 +56,6 @@ export class OllamaProvider implements ModelProvider {
         eval_duration: response.eval_duration
       };
     } catch (error) {
-      this.logger.error('Failed to generate response', { error, model: request.model });
       throw new Error(`Falha ao gerar resposta: ${error}`);
     }
   }
@@ -68,7 +65,6 @@ export class OllamaProvider implements ModelProvider {
       await this.makeRequest('/api/tags', 'GET');
       return true;
     } catch (error) {
-      this.logger.debug('Ollama not available', { error });
       return false;
     }
   }
@@ -88,30 +84,34 @@ export class OllamaProvider implements ModelProvider {
         digest: response.digest || 'unknown'
       };
     } catch (error) {
-      this.logger.error('Failed to get model info', { error, modelName });
       throw new Error(`Falha ao obter informações do modelo: ${error}`);
     }
   }
 
   private async makeRequest(endpoint: string, method: 'GET' | 'POST', body?: any): Promise<any> {
     const url = `${this.baseUrl}${endpoint}`;
-    const options: RequestInit = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal: AbortSignal.timeout(this.config.timeout)
-    };
-
-    if (body && method === 'POST') {
-      options.body = JSON.stringify(body);
-    }
-
+    
     let lastError: Error | null = null;
     
     for (let attempt = 1; attempt <= this.config.retryAttempts; attempt++) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+        
+        const options: RequestInit = {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal
+        };
+
+        if (body) {
+          options.body = JSON.stringify(body);
+        }
+
         const response = await fetch(url, options);
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -120,10 +120,11 @@ export class OllamaProvider implements ModelProvider {
         return await response.json();
       } catch (error) {
         lastError = error as Error;
-        this.logger.debug(`Request attempt ${attempt} failed`, { error, url });
         
         if (attempt < this.config.retryAttempts) {
-          await this.delay(1000 * attempt); // Exponential backoff
+          await this.delay(1000 * attempt);
+        } else {
+          throw error;
         }
       }
     }

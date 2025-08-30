@@ -46,22 +46,21 @@ export class Container {
 
       case 'ModelProvider':
         const ollamaConfig = await this.resolve<Configuration>('Configuration');
-        const logger = await this.resolve<Logger>('Logger');
-        return new OllamaProvider(ollamaConfig.ollama, logger);
+        return new OllamaProvider(ollamaConfig.ollama);
 
       case 'Agent':
         const modelProvider = await this.resolve<ModelProvider>('ModelProvider');
         const fileSystem = await this.resolve<FileSystemService>('FileSystemService');
         const agentConfig = await this.resolve<Configuration>('Configuration');
-        const agentLogger = await this.resolve<Logger>('Logger');
-        return new AgentService(modelProvider, fileSystem, agentConfig, agentLogger);
+        return new AgentService(modelProvider, fileSystem, agentConfig);
 
       case 'CLI':
         const agent = await this.resolve<Agent>('Agent');
         const provider = await this.resolve<ModelProvider>('ModelProvider');
         const cliConfig = await this.resolve<Configuration>('Configuration');
         const cliLogger = await this.resolve<Logger>('Logger');
-        return new CLI(agent, provider, cliConfig, cliLogger);
+        const { SimpleCLI } = await import('../cli/SimpleCLI');
+        return new SimpleCLI(agent, provider, cliConfig, cliLogger);
 
       default:
         throw new Error(`Unknown dependency: ${key}`);

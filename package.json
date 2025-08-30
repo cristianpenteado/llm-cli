@@ -40,6 +40,9 @@
   "homepage": "https://github.com/llm-cli/llm-cli#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.4.0",
+    "@types/blessed": "^0.1.25",
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.11.0",
     "chalk": "^4.1.2",
     "chokidar": "^3.5.3",
     "cli-progress": "^3.12.0",

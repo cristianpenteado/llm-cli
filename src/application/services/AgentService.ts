@@ -2,20 +2,16 @@ import { Agent, AgentResponse, TaskPlan, TaskStep, ConfirmationResult, StepResul
 import { ModelProvider } from '../../domain/communication/ModelProvider';
 import { Configuration } from '../../domain/configuration/Configuration';
 import { FileSystemService } from '../ports/FileSystemService';
-import { Logger } from '../ports/Logger';
 
 export class AgentService implements Agent {
   constructor(
     private modelProvider: ModelProvider,
     private fileSystem: FileSystemService,
-    private config: Configuration,
-    private logger: Logger
+    private config: Configuration
   ) {}
 
   async processQuery(query: string): Promise<AgentResponse> {
     try {
-      this.logger.info('Processing query', { query: query.substring(0, 100) });
-      
       const systemPrompt = this.buildSystemPrompt();
       const response = await this.modelProvider.generateResponse({
         model: this.config.model.defaultModel,
@@ -36,7 +32,6 @@ export class AgentService implements Agent {
         }
       };
     } catch (error) {
-      this.logger.error('Error processing query', { error, query });
       return {
         content: `Erro ao processar consulta: ${error}`,
         type: 'error'
@@ -80,7 +75,6 @@ Responda APENAS com um JSON válido no seguinte formato:
         ...planData
       };
     } catch (error) {
-      this.logger.error('Error creating plan', { error, task });
       throw new Error(`Falha ao criar plano: ${error}`);
     }
   }
@@ -95,7 +89,7 @@ Responda APENAS com um JSON válido no seguinte formato:
     }
 
     try {
-      this.logger.info('Executing step', { stepId: step.id, title: step.title });
+      // Executing step
 
       const filesModified: string[] = [];
       let output = '';
@@ -123,7 +117,7 @@ Responda APENAS com um JSON válido no seguinte formato:
         filesModified
       };
     } catch (error) {
-      this.logger.error('Error executing step', { error, step });
+      // Error executing step
       return {
         success: false,
         error: `Erro na execução: ${error}`
@@ -145,7 +139,7 @@ Responda APENAS com um JSON válido no seguinte formato:
         description: packageJson?.description
       };
     } catch (error) {
-      this.logger.error('Error reading project', { error, path: projectPath });
+      // Error reading project
       throw new Error(`Falha ao ler projeto: ${error}`);
     }
   }
@@ -194,7 +188,7 @@ Responda APENAS com um JSON válido no seguinte formato:
 
       return JSON.parse(response.response);
     } catch (error) {
-      this.logger.error('Error generating code', { error, specification });
+      // Error generating code
       throw new Error(`Falha ao gerar código: ${error}`);
     }
   }
@@ -246,7 +240,7 @@ Lembre-se: Você está em um chat interativo, então seja natural e conversacion
         return JSON.parse(content);
       }
     } catch (error) {
-      this.logger.debug('No package.json found or invalid JSON', { error });
+      // No package.json found or invalid JSON
     }
     return null;
   }
