@@ -1,235 +1,230 @@
-# LLM CLI
+# LLM-CLI - Assistente de IA Conversacional
 
-> **AI Agent Terminal** - Desenvolvido para a comunidade ❤️
-
-Uma CLI inteligente que funciona como um agente de IA local, integrando-se diretamente com modelos LLM locais via Ollama. A CLI agora inclui um servidor MCP integrado e otimizações de performance para respostas ultra-rápidas.
+> **Chat Inteligente para Desenvolvimento** - Converse naturalmente, implemente automaticamente ❤️
 
 ## 🚀 Características Principais
 
-### ✨ **Performance Otimizada**
-- **Cache inteligente** de respostas e modelos para respostas instantâneas
-- **Timeouts configuráveis** para evitar esperas longas
-- **Processamento assíncrono** para melhor responsividade
-- **Fallback automático** entre MCP e Ollama direto
-
-### 🤖 **Modelo Padrão Automático**
-- **Download automático** do `phi3:mini` na primeira inicialização
-- **Verificação inteligente** de modelos disponíveis
-- **Fallback automático** para download quando necessário
-- **Inicialização automática** do OllamaManager
-
-### 🔌 **Arquitetura Integrada**
-- **Servidor MCP integrado** (não depende de processos externos)
-- **Comunicação direta** com Ollama para máxima velocidade
-- **Cache em memória** para operações repetidas
-- **Otimizações de rede** para modelos locais
-
-### 🎯 **Funcionalidades Inteligentes**
-- **Detecção automática** de linguagem e framework do projeto
-- **Contexto inteligente** baseado na estrutura do projeto
-- **Sugestões contextuais** para melhor produtividade
-- **Interface conversacional** natural e intuitiva
+- 💬 **Chat Conversacional**: Fale naturalmente, sem comandos especiais
+- 🎯 **Detecção Automática**: Detecta quando você quer implementar algo
+- 📋 **Planejamento Inteligente**: Cria planos automaticamente e executa com confirmação
+- ⚡ **Sugestão de Comandos**: Sugere e executa comandos do sistema com sua aprovação
+- 🤖 **Agente IA Avançado**: Similar ao Claude Code, capaz de Q&A, planejamento e geração de código
+- 🔧 **Integração Direta Ollama**: Comunicação REST eficiente (sem overhead MCP)
+- 🏗️ **Arquitetura DDD**: Clean Code com domínios bem definidos
+- 🧪 **Testes Completos**: 14/14 testes passando
 
 ## 📦 Instalação
 
 ### Pré-requisitos
-- **Node.js** 18+ 
-- **Ollama** instalado e configurado
 
-### Instalar CLI
+- Node.js 18+
+- Ollama instalado e rodando na porta 11434
+- Modelos Ollama (ex: `llama3.2`, `qwen2.5:7b`)
+
+### Instalação
+
 ```bash
-# Instalar globalmente
-npm install -g llm-cli
-
-# Ou usar npx
-npx llm-cli
+git clone https://github.com/cristianpenteado/llm-cli.git
+cd llm-cli
+npm install
+npm run build
+npm link
 ```
 
-### Instalar Ollama
-```bash
-# Linux/macOS
-curl -fsSL https://ollama.ai/install.sh | sh
+## 🎯 Como Usar
 
-# Windows
-# Baixar de https://ollama.ai/download
+### Iniciar Chat Conversacional
+
+```bash
+# Iniciar chat interativo
+llm
 ```
 
-## 🚀 Uso Rápido
+### Exemplos de Conversa Natural
 
-### 1. **Inicializar Projeto** (Download automático do phi3:mini)
 ```bash
-cd seu-projeto
-llm init
-# ✅ phi3:mini será baixado automaticamente se não existir
+# Perguntas conceituais
+"Como funciona JWT?"
+"Explique o padrão Repository"
+"Qual a diferença entre REST e GraphQL?"
+
+# Implementações (detecta automaticamente)
+"Quero criar uma API REST com Express"
+"Implementa autenticação no meu projeto"
+"Fazer um sistema de login completo"
+"Configurar TypeScript no projeto"
 ```
 
-### 2. **Iniciar Chat** (Respostas ultra-rápidas)
+### Comandos Básicos (apenas 3!)
+
+- `help` - Mostra como usar
+- `clear` - Limpa tela
+- `exit` - Sair
+
+**Tudo mais é conversa natural!**
+
+### Exemplo de Fluxo Conversacional
+
 ```bash
-llm chat
-# ⚡ Cache inteligente para respostas instantâneas
-# 🔄 Fallback automático se MCP falhar
+$ llm
+🤖 LLM-CLI - Assistente de IA para Desenvolvimento
+
+> Quero criar um sistema de autenticação completo
+
+🤔 Processando...
+💬 Resposta: Vou criar um sistema de autenticação JWT completo para você...
+
+🎯 Detectei uma solicitação de implementação!
+❓ Quer que eu crie um plano detalhado para isso? [s/n]: s
+
+✅ Plano criado: Sistema de Autenticação JWT
+📝 Passos:
+  ▶️ 1. Setup inicial do projeto
+     Configurar estrutura base com Express e TypeScript
+  ⏸️ 2. Implementar middleware de autenticação
+     Criar middleware JWT para validação de tokens
+  ⏸️ 3. Criar rotas de auth
+     Implementar login, registro e refresh token
+
+❓ Executar o plano agora? [s/n]: s
+
+🚀 Executando plano...
+📍 Passo 1: Setup inicial do projeto
+Executar este passo? [sim/skip/stop]: sim
+✅ Passo concluído
+
+> Como funciona JWT?
+
+💬 Resposta: JWT (JSON Web Token) é um padrão para transmitir informações...
+[Explicação detalhada]
 ```
 
-### 3. **Comandos Principais**
-```bash
-llm init          # Inicializar projeto (baixa modelo padrão)
-llm chat          # Chat conversacional otimizado
-llm status        # Status do projeto e modelo
-llm list-models   # Listar modelos disponíveis
-llm change-model  # Trocar modelo do projeto
-```
+## ⚙️ Configuração
 
-## 🎯 Casos de Uso
+Arquivo de configuração em `~/.llm-cli/config.yaml`:
 
-### **Desenvolvedores**
-- **Code Review** rápido com contexto do projeto
-- **Debugging** assistido por IA
-- **Refatoração** inteligente de código
-- **Documentação** automática
+```yaml
+model:
+  defaultModel: "llama3.2"
+  temperature: 0.7
+  maxTokens: 4096
+  fallbackModels: ["llama3.2:1b", "qwen2.5:7b"]
 
-### **Arquitetos**
-- **Análise** de estrutura de projetos
-- **Recomendações** de padrões
-- **Otimizações** de performance
-- **Migrações** assistidas
+agent:
+  name: "Claude Code Assistant"
+  personality: "helpful"  # helpful|concise|detailed|creative
+  autoConfirm: false
+  maxPlanSteps: 10
+  contextWindow: 8192
 
-### **DevOps**
-- **Análise** de logs e métricas
-- **Automação** de processos
-- **Troubleshooting** inteligente
-- **Monitoramento** proativo
+cli:
+  theme: "auto"  # dark|light|auto
+  showTimestamps: false
+  logLevel: "info"  # error|warn|info|debug
+  historySize: 100
 
-## ⚡ Otimizações de Performance
-
-### **Cache Inteligente**
-- **Respostas em cache** por 30 segundos
-- **Modelos em cache** por 10 segundos
-- **Hash de prompts** para identificação única
-- **Limpeza automática** de cache expirado
-
-### **Timeouts Configuráveis**
-- **Resposta do modelo**: 30 segundos
-- **Download de modelo**: 5 minutos
-- **Listagem de modelos**: 5 segundos
-- **Inicialização**: 10 segundos
-
-### **Processamento Assíncrono**
-- **Modelos em background** para não bloquear
-- **Cache limpo** em paralelo
-- **Verificações não-bloqueantes** de status
-- **Fallbacks automáticos** para melhor UX
-
-## 🔧 Configuração
-
-### **Modelo Padrão**
-```bash
-# O phi3:mini é baixado automaticamente
-# Para usar outros modelos:
-ollama pull nome-do-modelo
-llm change-model nome-do-modelo
-```
-
-### **Cache e Performance**
-```bash
-# Limpar cache manualmente
-llm clear-cache
-
-# Ver estatísticas
-llm status
+ollama:
+  host: "localhost"
+  port: 11434
+  timeout: 30000
+  retryAttempts: 3
+  keepAlive: "5m"
 ```
 
 ## 🏗️ Arquitetura
 
-### **Componentes Principais**
+### Estrutura DDD
+
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   LLMCLI        │    │  OllamaManager  │    │   MCPServer     │
-│   (Orquestrador)│◄──►│  (Cache + MCP)  │◄──►│  (Integrado)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ProjectManager   │    │  Conversation   │    │   FileManager   │
-│(Projetos)      │    │  Manager        │    │  (Arquivos)     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+src/
+├── domain/                    # Domínio (regras de negócio)
+│   ├── agent/                # Domínio do agente IA
+│   │   └── Agent.ts         # Interfaces do agente
+│   ├── communication/        # Domínio de comunicação
+│   │   └── ModelProvider.ts # Interface do provedor de modelo
+│   └── configuration/        # Domínio de configuração
+│       └── Configuration.ts # Interfaces de config
+├── application/              # Camada de aplicação
+│   ├── services/            # Serviços de aplicação
+│   │   └── AgentService.ts  # Implementação do agente
+│   └── ports/               # Portas (interfaces)
+│       ├── FileSystemService.ts
+│       └── Logger.ts
+├── infrastructure/          # Infraestrutura
+│   ├── cli/                # Interface CLI
+│   │   └── CLI.ts          # CLI interativo
+│   ├── ollama/             # Integração Ollama
+│   │   └── OllamaProvider.ts
+│   ├── filesystem/         # Sistema de arquivos
+│   ├── logging/           # Sistema de logs
+│   ├── configuration/     # Repositório de config
+│   └── di/               # Injeção de dependência
+│       └── Container.ts   # Container DI
+└── __tests__/            # Testes
+    ├── unit/            # Testes unitários
+    └── integration/     # Testes de integração
 ```
 
-### **Fluxo de Performance**
-1. **Cache Check** → Resposta instantânea se disponível
-2. **MCP Integrado** → Comunicação direta sem processos externos
-3. **Ollama Fallback** → Resposta direta se MCP falhar
-4. **Cache Update** → Armazenar para futuras consultas
+### Fluxo de Comunicação
 
-## 🚀 Modelos Recomendados
+```
+CLI → AgentService → OllamaProvider → Ollama API (REST)
+```
 
-### **Modelo Padrão (Automático)**
-- **`phi3:mini`** - Leve, rápido, ideal para desenvolvimento
+**Por que não MCP?** Para ambiente local, comunicação direta via REST é mais simples, eficiente e confiável que protocolos complexos.
 
-### **Modelos Adicionais**
-- **`llama3.2:3b`** - Equilibrado entre velocidade e qualidade
-- **`mistral:7b`** - Excelente para código e documentação
-- **`codellama:7b`** - Especializado em desenvolvimento
+## 📚 Documentação Completa
 
-> **💡 Dica**: O `phi3:mini` é baixado automaticamente. Para outros modelos, use `ollama pull nome-do-modelo`
+- **[Guia Conversacional](docs/CONVERSATIONAL-GUIDE.md)** - Como conversar com o assistente
+- **[Arquitetura](docs/ARCHITECTURE.md)** - Design técnico e decisões arquiteturais  
+- **[Changelog](docs/CHANGELOG.md)** - Histórico completo de mudanças
 
-## 🔍 Troubleshooting
+## 🧪 Desenvolvimento
 
-### **Modelo não encontrado**
+### Setup
+
 ```bash
-# Baixar manualmente
-ollama pull nome-do-modelo
-
-# Ou usar modelo padrão
-llm change-model phi3:mini
+npm install
+npm run dev     # Desenvolvimento
+npm run build   # Build produção
+npm test        # Executar testes
+npm run test:watch  # Testes em watch mode
 ```
 
-### **Performance lenta**
+### Testes
+
 ```bash
-# Limpar cache
-llm clear-cache
+# Todos os testes
+npm test
 
-# Verificar status
-llm status
+# Testes específicos
+npm test -- AgentService
+npm test -- OllamaProvider
+
+# Coverage
+npm test -- --coverage
 ```
 
-### **Erro de conexão**
-```bash
-# Verificar Ollama
-ollama list
+### Estrutura de Testes
 
-# Reiniciar servidor
-ollama serve
-```
+- **Unit Tests**: Testam componentes isoladamente
+- **Integration Tests**: Testam fluxo completo CLI → Agent → Ollama
+- **Mocks**: Simulam dependências externas (Ollama API, filesystem)
 
 ## 🤝 Contribuição
 
-### **Como Contribuir**
-1. **Fork** o projeto
-2. **Crie** uma branch para sua feature
-3. **Commit** suas mudanças
-4. **Push** para a branch
-5. **Abra** um Pull Request
-
-### **Áreas de Melhoria**
-- **Novos modelos** de IA
-- **Otimizações** de performance
-- **Integrações** com outras ferramentas
-- **Testes** e documentação
+1. Fork o projeto
+2. Crie branch: `git checkout -b feature/nova-funcionalidade`
+3. Commit: `git commit -m 'Add nova funcionalidade'`
+4. Push: `git push origin feature/nova-funcionalidade`
+5. Abra Pull Request
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+MIT License - veja [LICENSE](LICENSE) para detalhes.
 
-## 🙏 Agradecimentos
+## 🆘 Suporte
 
-- **Ollama** pela plataforma de modelos locais
-- **Comunidade open-source** pelo suporte contínuo
-- **Contribuidores** que tornaram este projeto possível
-
----
-
-**⭐ Se este projeto te ajudou, considere dar uma estrela!**
-
-**💬 Dúvidas? Abra uma issue ou participe das discussões!**
-
-**🚀 Desenvolvido para a comunidade ❤️**
+- 🐛 **Issues**: [GitHub Issues](https://github.com/cristianpenteado/llm-cli/issues)
+- 💬 **Discussões**: [GitHub Discussions](https://github.com/cristianpenteado/llm-cli/discussions)
+- 📧 **Email**: cristian.penteado@gmail.com
