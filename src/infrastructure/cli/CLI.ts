@@ -1,12 +1,21 @@
+import * as blessed from 'blessed';
 import * as readline from 'readline';
 import chalk from 'chalk';
 import { Agent, TaskPlan, TaskStep, ConfirmationResult } from '../../domain/agent/Agent';
 import { ModelProvider } from '../../domain/communication/ModelProvider';
 import { Configuration } from '../../domain/configuration/Configuration';
 import { Logger } from '../../application/ports/Logger';
+import { WebSearchService } from '../../application/services/WebSearchService';
+import { DuckDuckGoProvider } from '../search/DuckDuckGoProvider';
 
 export class CLI {
+  private screen: any;
+  private chatBox: any;
+  private inputBox: any;
+  private headerBox: any;
   private rl: readline.Interface;
+  private webSearchService: WebSearchService;
+  private messages: Array<{content: string, type: 'user' | 'assistant' | 'error'}> = [];
   private currentPlan: TaskPlan | null = null;
   private currentStepIndex = 0;
 
@@ -18,43 +27,143 @@ export class CLI {
   ) {
     this.rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout,
-      prompt: chalk.cyan('> ')
+      output: process.stdout
     });
+    this.webSearchService = new WebSearchService(
+      new DuckDuckGoProvider(),
+      this.agent
+    );
+    this.initializeUI();
   }
 
-  async run(): Promise<void> {
-    this.showWelcome();
+  private initializeUI(): void {
+    // Create screen
+    this.screen = blessed.screen({
+      smartCSR: true,
+      title: 'LLM-CLI - AI Agent Terminal'
+    });
+
+    // Header with banner
+    this.headerBox = blessed.box({
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: 12,
+      content: this.getBannerContent(),
+      tags: true,
+      style: {
+        fg: 'white',
+        bg: 'blue'
+      },
+      border: {
+        type: 'line'
+      }
+    });
+
+    // Chat messages area
+    this.chatBox = blessed.box({
+      top: 12,
+      left: 0,
+      width: '100%',
+      height: '100%-15',
+      scrollable: true,
+      alwaysScroll: true,
+      tags: true,
+      style: {
+        fg: 'white',
+        bg: 'black'
+      },
+      border: {
+        type: 'line'
+      }
+    });
+
+    // Input box
+    this.inputBox = blessed.textbox({
+      bottom: 0,
+      left: 0,
+      width: '100%',
+      height: 3,
+      inputOnFocus: true,
+      style: {
+        fg: 'white',
+        bg: 'black'
+      },
+      border: {
+        type: 'line'
+      }
+    });
+
+    // Append elements to screen
+    this.screen.append(this.headerBox);
+    this.screen.append(this.chatBox);
+    this.screen.append(this.inputBox);
+
+    // Key bindings
+    this.screen.key(['escape', 'q', 'C-c'], () => {
+      process.exit(0);
+    });
+
+    this.inputBox.key('enter', () => {
+      const input = this.inputBox.getValue();
+      if (input.trim()) {
+        this.handleInput(input.trim());
+        this.inputBox.clearValue();
+      }
+    });
+
+    // Focus input
+    this.inputBox.focus();
+    this.screen.render();
+  }
+
+  private getBannerContent(): string {
+    return `{center}{bold}
+██╗     ██╗     ███╗   ███╗     ██████╗██╗     ██╗
+██║     ██║     ████╗ ████║    ██╔════╝██║     ██║
+██║     ██║     ██╔████╔██║    ██║     ██║     ██║
+██║     ██║     ██║╚██╔╝██║    ██║     ██║     ██║
+███████╗███████╗██║ ╚═╝ ██║    ╚██████╗███████╗██║
+╚══════╝╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
+
+                AI Agent Terminal
+        Desenvolvido para a comunidade ❤️
+{/bold}{/center}`;
+  }
+
+  async run(selectedModel?: string): Promise<void> {
+    if (selectedModel) {
+      this.config.model.defaultModel = selectedModel;
+    }
     await this.checkOllamaConnection();
+    this.showWelcome();
     this.startInteractiveSession();
   }
 
   private showWelcome(): void {
-    console.log(chalk.blue.bold('\n🤖 LLM-CLI - Assistente de IA para Desenvolvimento\n'));
-    console.log(chalk.gray('Olá! Sou seu assistente de IA. Posso:'));
-    console.log(chalk.gray('• Conversar e explicar conceitos de programação'));
-    console.log(chalk.gray('• Detectar quando você quer implementar algo e criar planos automaticamente'));
-    console.log(chalk.gray('• Sugerir e executar comandos no terminal (com sua aprovação)'));
-    console.log(chalk.gray('• Gerar código e funcionalidades'));
-    console.log(chalk.gray('\nConverse naturalmente comigo! Exemplos:'));
-    console.log(chalk.cyan('  "Como funciona JWT?"'));
-    console.log(chalk.cyan('  "Quero criar uma API REST com Express"'));
-    console.log(chalk.cyan('  "Implementa autenticação no meu projeto"'));
-    console.log(chalk.gray('\nDigite "help" para comandos básicos.\n'));
+    console.log('\n');
+    console.log(chalk.hex('#8B5CF6')('██╗     ██╗     ███╗   ███╗     ██████╗██╗     ██╗'));
+    console.log(chalk.hex('#A78BFA')('██║     ██║     ████╗ ████║    ██╔════╝██║     ██║'));
+    console.log(chalk.hex('#C4B5FD')('██║     ██║     ██╔████╔██║    ██║     ██║     ██║'));
+    console.log(chalk.hex('#EDE9FE')('██║     ██║     ██║╚██╔╝██║    ██║     ██║     ██║'));
+    console.log(chalk.hex('#F3F4F6')('███████╗███████╗██║ ╚═╝ ██║    ╚██████╗███████╗██║'));
+    console.log(chalk.hex('#DDDFFE')('╚══════╝╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝'));
+    console.log('\n');
+    console.log(chalk.hex('#8B5CF6').bold('                AI Agent Terminal'));
+    console.log(chalk.hex('#C4B5FD')('        Desenvolvido para a comunidade ❤️'));
+    console.log('\n');
   }
 
   private async checkOllamaConnection(): Promise<void> {
     try {
       const isAvailable = await this.modelProvider.isAvailable();
-      if (isAvailable) {
-        console.log(chalk.green('✓ Conectado ao Ollama'));
-        const models = await this.modelProvider.listModels();
-        console.log(chalk.gray(`  Modelos disponíveis: ${models.map(m => m.name).join(', ')}\n`));
-      } else {
-        console.log(chalk.yellow('⚠ Ollama não está disponível. Verifique se está rodando na porta 11434\n'));
+      if (!isAvailable) {
+        console.log(chalk.red('✗ Ollama não disponível'));
+        console.log(chalk.yellow('Certifique-se de que o Ollama está rodando na porta 11434\n'));
       }
     } catch (error) {
-      console.log(chalk.red(`✗ Erro ao conectar com Ollama: ${error}\n`));
+      console.log(chalk.red('✗ Erro ao conectar com Ollama'));
+      console.log(chalk.yellow('Certifique-se de que o Ollama está rodando na porta 11434\n'));
     }
   }
 
@@ -107,23 +216,22 @@ export class CLI {
   }
 
   private async processConversationalInput(input: string): Promise<void> {
-    console.log(chalk.gray('\n🤔 Processando...'));
+    const spinner = this.showSpinner();
     
     try {
-      // Enhanced prompt to detect implementation requests and suggest actions
-      const enhancedPrompt = `${input}
+      // Check if this is a search request first
+      if (this.webSearchService.isSearchQuery(input)) {
+        await this.handleSearchRequest(input, spinner);
+        return;
+      }
 
-INSTRUÇÕES ESPECIAIS PARA O ASSISTENTE:
-- Se o usuário está pedindo para implementar, criar, fazer, desenvolver algo, você deve:
-  1. Primeiro responder explicando o que vai fazer
-  2. Criar um plano detalhado em JSON no formato especificado
-  3. Sugerir comandos específicos se necessário
-  
-- Se o usuário está fazendo uma pergunta conceitual, apenas responda normalmente
-- Se você sugerir comandos, formate-os como: COMANDO_SUGERIDO: comando aqui
-- Seja conversacional e natural`;
+      // Detect interaction type and adjust configuration dynamically
+      const isImplementationRequest = this.detectImplementationRequest(input);
+      const enhancedPrompt = this.buildContextualPrompt(input, isImplementationRequest);
 
+      // Process query with contextual configuration
       const response = await this.agent.processQuery(enhancedPrompt);
+      this.clearSpinner(spinner);
       
       console.log(chalk.green('\n💬 Resposta:'));
       console.log(this.formatResponse(response.content, response.type));
@@ -135,8 +243,26 @@ INSTRUÇÕES ESPECIAIS PARA O ASSISTENTE:
         console.log(chalk.gray(`\n⏱️  Modelo: ${response.metadata.model} | Duração: ${Math.round((response.metadata.duration || 0) / 1000000)}ms`));
       }
     } catch (error) {
-      console.log(chalk.red(`\n❌ Erro ao processar: ${error}`));
+      this.clearSpinner(spinner);
+      console.log(chalk.red('\n💬 Resposta:'));
+      console.log(chalk.red(`Erro ao processar consulta: ${error}`));
     }
+  }
+
+  private showSpinner(): NodeJS.Timeout {
+    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    let i = 0;
+    process.stdout.write('\n');
+    
+    return setInterval(() => {
+      process.stdout.write(`\r${chalk.cyan(frames[i % frames.length])} Processando...`);
+      i++;
+    }, 100);
+  }
+
+  private clearSpinner(spinner: NodeJS.Timeout): void {
+    clearInterval(spinner);
+    process.stdout.write('\r' + ' '.repeat(20) + '\r');
   }
 
   private async handleResponseActions(responseContent: string, originalInput: string): Promise<void> {
@@ -444,17 +570,25 @@ INSTRUÇÕES ESPECIAIS PARA O ASSISTENTE:
     console.log(chalk.gray('  • "Como funciona JWT?"'));
     console.log(chalk.gray('  • "Explique o padrão Repository"'));
     console.log(chalk.gray('  • "Qual a diferença entre REST e GraphQL?"'));
+    console.log(chalk.green('\n🔍 Pesquisa na web (detecta automaticamente):'));
+    console.log(chalk.gray('  • "Pesquise sobre React Hooks"'));
+    console.log(chalk.gray('  • "O que é Docker?"'));
+    console.log(chalk.gray('  • "Buscar informações sobre TypeScript"'));
+    console.log(chalk.gray('  • "Como funciona GraphQL?"'));
     console.log(chalk.green('\n🛠️ Implementação (detecta automaticamente):'));
     console.log(chalk.gray('  • "Quero criar uma API REST com Express"'));
     console.log(chalk.gray('  • "Implementa autenticação no meu projeto"'));
     console.log(chalk.gray('  • "Fazer um sistema de login completo"'));
     console.log(chalk.gray('  • "Configurar TypeScript no projeto"'));
     console.log(chalk.yellow('\n✨ O assistente vai:'));
+    console.log(chalk.gray('  • Detectar quando você quer pesquisar algo'));
+    console.log(chalk.gray('  • Buscar informações atualizadas na web'));
     console.log(chalk.gray('  • Detectar quando você quer implementar algo'));
     console.log(chalk.gray('  • Criar planos automaticamente'));
     console.log(chalk.gray('  • Sugerir comandos para executar'));
     console.log(chalk.gray('  • Pedir sua aprovação antes de executar'));
     console.log(chalk.cyan('\n💡 Dica: Converse naturalmente, sem comandos especiais!'));
+    console.log(chalk.magenta('\n🌐 Pesquisa: Use DuckDuckGo para buscar informações atualizadas'));
   }
 
   private async executeCommand(command: string): Promise<void> {
@@ -551,6 +685,99 @@ INSTRUÇÕES ESPECIAIS PARA O ASSISTENTE:
         resolve(['sim', 's', 'yes', 'y'].includes(answer.toLowerCase().trim()));
       });
     });
+  }
+
+  private detectImplementationRequest(input: string): boolean {
+    const implementationKeywords = [
+      'implementar', 'criar', 'fazer', 'desenvolver', 'construir', 'gerar',
+      'adicionar', 'incluir', 'setup', 'configurar', 'instalar', 'build',
+      'codificar', 'programar', 'escrever código', 'funcionalidade',
+      'feature', 'sistema', 'aplicação', 'app', 'projeto'
+    ];
+    
+    const lowerInput = input.toLowerCase();
+    return implementationKeywords.some(keyword => lowerInput.includes(keyword));
+  }
+
+  private buildContextualPrompt(input: string, isImplementation: boolean): string {
+    if (isImplementation) {
+      return `${input}
+
+CONFIGURAÇÃO DINÂMICA PARA IMPLEMENTAÇÃO:
+- USE TEMPERATURA ALTA (0.8-0.9) para criatividade no planejamento
+- USE MÁXIMO DE TOKENS (4096+) para respostas completas e detalhadas
+- USE PERSONALIDADE DETALHADA para explicações profundas
+
+INSTRUÇÕES PARA IMPLEMENTAÇÃO:
+- Você é um assistente de desenvolvimento experiente e humanizado
+- Adapte sua linguagem ao nível técnico percebido do usuário
+- Para implementações, seja EXTREMAMENTE DETALHADO e COMPLETO no planejamento
+- Use toda sua capacidade de análise para criar planos robustos e abrangentes
+- Explique o "porquê" das decisões técnicas de forma acessível
+- Seja empático, encorajador e motivador durante o processo
+- Antecipe problemas e sugira soluções preventivas
+- Formate comandos como: COMANDO_SUGERIDO: comando aqui
+- Crie planos em JSON detalhados e estruturados quando necessário
+- Considere aspectos de arquitetura, performance, manutenibilidade e boas práticas`;
+    } else {
+      return `${input}
+
+CONFIGURAÇÃO DINÂMICA CONVERSACIONAL:
+- USE TEMPERATURA MODERADA (0.3-0.5) para respostas diretas
+- USE TOKENS MODERADOS (2048) para eficiência
+- USE PERSONALIDADE ADAPTÁVEL baseada no nível do usuário
+
+INSTRUÇÕES CONVERSACIONAIS:
+- Seja natural, amigável e adaptável ao nível técnico do usuário
+- Se for uma pergunta simples, responda de forma direta mas humanizada
+- Se perceber que o usuário é iniciante, explique conceitos básicos com paciência
+- Se for experiente, pode ser mais técnico e conciso
+- Sempre mantenha um tom acolhedor, prestativo e encorajador
+- Use analogias e exemplos quando apropriado para facilitar o entendimento`;
+    }
+  }
+
+  private async handleSearchRequest(input: string, spinner: NodeJS.Timeout): Promise<void> {
+    try {
+      const searchQuery = this.webSearchService.extractSearchQuery(input);
+      console.log(chalk.cyan(`\n🔍 Pesquisando: "${searchQuery}"`));
+      
+      const searchResponse = await this.webSearchService.searchAndSummarize(searchQuery, 5);
+      this.clearSpinner(spinner);
+      
+      console.log(chalk.green('\n🌐 Resultados da Pesquisa:'));
+      console.log(chalk.blue(`\n📝 Resumo:`));
+      console.log(searchResponse.summary);
+      
+      if (searchResponse.results.length > 0) {
+        console.log(chalk.blue('\n🔗 Fontes:'));
+        searchResponse.results.forEach((result, index) => {
+          console.log(`${index + 1}. ${chalk.cyan(result.title)}`);
+          console.log(`   ${chalk.gray(result.url)}`);
+          if (result.snippet && result.snippet !== result.title) {
+            console.log(`   ${chalk.gray(result.snippet.substring(0, 150))}...`);
+          }
+          console.log('');
+        });
+        
+        console.log(chalk.gray(`\n⏱️  Pesquisa concluída em ${searchResponse.searchTime}ms`));
+        console.log(chalk.gray(`📊 ${searchResponse.results.length} resultado(s) encontrado(s)`));
+      }
+      
+    } catch (error: any) {
+      this.clearSpinner(spinner);
+      console.log(chalk.red('\n❌ Erro na pesquisa:'));
+      console.log(chalk.red(error.message));
+    }
+  }
+
+  private getImplementationConfig(): any {
+    return {
+      temperature: 0.8,
+      maxTokens: 4096,
+      personality: 'detailed',
+      contextWindow: 8192
+    };
   }
 
   private formatResponse(content: string, type: string): string {
