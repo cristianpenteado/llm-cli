@@ -36,7 +36,14 @@ export class OllamaProvider implements ModelProvider {
         prompt: request.prompt,
         system: request.system,
         context: request.context,
-        options: request.options,
+        options: {
+          ...request.options,
+          num_predict: 2048,
+          temperature: 0.3,
+          top_p: 0.9,
+          repeat_penalty: 1.1
+        },
+        keep_alive: '10m',
         stream: false
       };
 
@@ -98,19 +105,15 @@ export class OllamaProvider implements ModelProvider {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
         
-        const options: RequestInit = {
+        const response = await fetch(url, {
           method,
           headers: {
             'Content-Type': 'application/json',
           },
+          body: body ? JSON.stringify(body) : undefined,
           signal: controller.signal
-        };
+        });
 
-        if (body) {
-          options.body = JSON.stringify(body);
-        }
-
-        const response = await fetch(url, options);
         clearTimeout(timeoutId);
         
         if (!response.ok) {

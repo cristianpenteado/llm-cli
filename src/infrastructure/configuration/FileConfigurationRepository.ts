@@ -67,9 +67,9 @@ export class FileConfigurationRepository implements ConfigurationRepository {
       ollama: {
         host: 'localhost',
         port: 11434,
-        timeout: 60000,
-        retryAttempts: 1,
-        keepAlive: '2m'
+        timeout: 120000,
+        retryAttempts: 2,
+        keepAlive: '10m'
       }
     };
   }

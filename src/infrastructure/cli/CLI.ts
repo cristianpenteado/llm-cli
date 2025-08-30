@@ -137,6 +137,9 @@ export class CLI {
     }
     await this.checkOllamaConnection();
     this.showWelcome();
+    // Skip warmup for now to avoid blocking
+    // await this.warmupModel();
+    console.log(chalk.cyan('💬 Digite sua mensagem ou "help" para ajuda\n'));
     this.startInteractiveSession();
   }
 
@@ -229,8 +232,14 @@ export class CLI {
       const isImplementationRequest = this.detectImplementationRequest(input);
       const enhancedPrompt = this.buildContextualPrompt(input, isImplementationRequest);
 
-      // Process query with contextual configuration
-      const response = await this.agent.processQuery(enhancedPrompt);
+      // Process query with timeout protection
+      const response = await Promise.race([
+        this.agent.processQuery(enhancedPrompt),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout: Resposta demorou mais que 60s')), 60000)
+        )
+      ]);
+      
       this.clearSpinner(spinner);
       
       console.log(chalk.green('\n💬 Resposta:'));
@@ -242,10 +251,17 @@ export class CLI {
       if (response.metadata) {
         console.log(chalk.gray(`\n⏱️  Modelo: ${response.metadata.model} | Duração: ${Math.round((response.metadata.duration || 0) / 1000000)}ms`));
       }
-    } catch (error) {
+    } catch (error: any) {
       this.clearSpinner(spinner);
       console.log(chalk.red('\n💬 Resposta:'));
-      console.log(chalk.red(`Erro ao processar consulta: ${error}`));
+      if (error.message.includes('Timeout')) {
+        console.log(chalk.yellow('⏰ O modelo está demorando para responder. Tente:'));
+        console.log(chalk.gray('  • Reiniciar o Ollama: ollama serve'));
+        console.log(chalk.gray('  • Verificar se o modelo está carregado: ollama ps'));
+        console.log(chalk.gray('  • Testar diretamente: ollama run phi3:mini "oi"'));
+      } else {
+        console.log(chalk.red(`Erro: ${error.message}`));
+      }
     }
   }
 
@@ -700,6 +716,14 @@ export class CLI {
   }
 
   private buildContextualPrompt(input: string, isImplementation: boolean): string {
+    // For simple greetings, use minimal prompt
+    const simpleGreetings = ['oi', 'olá', 'ola', 'hi', 'hello', 'hey', 'e aí', 'eai'];
+    if (simpleGreetings.includes(input.toLowerCase().trim())) {
+      return `${input}
+
+Responda de forma simples e natural. Apenas cumprimente de volta e pergunte como pode ajudar, sem explicações longas.`;
+    }
+
     if (isImplementation) {
       return `${input}
 
@@ -735,6 +759,56 @@ INSTRUÇÕES CONVERSACIONAIS:
 - Sempre mantenha um tom acolhedor, prestativo e encorajador
 - Use analogias e exemplos quando apropriado para facilitar o entendimento`;
     }
+  }
+
+  private async warmupModel(): Promise<void> {
+    console.log(chalk.yellow('\n🚀 Inicializando assistente...'));
+    
+    const warmupSpinner = this.showWarmupSpinner();
+    
+    try {
+      // Show tips while warming up
+      this.showWarmupTips();
+      
+      // Send a simple warmup query to load the model with longer timeout
+      const warmupQuery = "Oi";
+      const response = await Promise.race([
+        this.agent.processQuery(warmupQuery),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Warmup timeout')), 60000)
+        )
+      ]);
+      
+      this.clearSpinner(warmupSpinner);
+      console.log(chalk.green('\n✅ Assistente pronto! Respostas serão instantâneas agora.'));
+      console.log(chalk.cyan('💬 Digite sua mensagem ou "help" para ajuda\n'));
+      
+    } catch (error: any) {
+      this.clearSpinner(warmupSpinner);
+      console.log(chalk.yellow('\n⚠️  Pré-carregamento falhou, mas o assistente está funcionando.'));
+      console.log(chalk.cyan('💬 Digite sua mensagem ou "help" para ajuda\n'));
+    }
+  }
+
+  private showWarmupSpinner(): NodeJS.Timeout {
+    const frames = ['🔄', '🔃', '🔁', '🔀'];
+    let i = 0;
+    process.stdout.write('\n');
+    
+    return setInterval(() => {
+      process.stdout.write(`\r${chalk.cyan(frames[i % frames.length])} Carregando modelo phi3:mini... (primeira vez pode demorar 30s)`);
+      i++;
+    }, 500);
+  }
+
+  private showWarmupTips(): void {
+    setTimeout(() => {
+      console.log(chalk.blue('\n💡 Dicas enquanto carrega:'));
+      console.log(chalk.gray('  • Perguntas: "Como funciona JWT?" ou "O que é Docker?"'));
+      console.log(chalk.gray('  • Pesquisas: "Pesquise sobre React Hooks"'));
+      console.log(chalk.gray('  • Implementação: "Criar uma API REST" ou "Fazer um login"'));
+      console.log(chalk.gray('  • Comandos: "help", "clear", "exit"'));
+    }, 2000);
   }
 
   private async handleSearchRequest(input: string, spinner: NodeJS.Timeout): Promise<void> {
