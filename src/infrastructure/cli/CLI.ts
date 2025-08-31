@@ -43,7 +43,9 @@ export class CLI {
       
       // Exibe informações do modelo de forma mais sutil
       console.log(chalk.gray(`Model: ${selectedModel}`));
-      console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+      const terminalWidth = process.stdout.columns || 80;
+      const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
+      console.log(chalk.gray(`━━${separator}━━`));
       console.log('');
       
       this.rl.on('line', async (input) => {
@@ -84,7 +86,9 @@ export class CLI {
         console.clear();
         console.log(this.getBannerContent());
         console.log(chalk.gray(`Model: ${this.getCurrentModel()}`));
-        console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+        const terminalWidth = process.stdout.columns || 80;
+        const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
+        console.log(chalk.gray(`━━${separator}━━`));
         console.log('');
         return;
       }
@@ -143,11 +147,23 @@ export class CLI {
   }
 
   private getBannerContent(): string {
+    const terminalWidth = process.stdout.columns || 80;
+    const minWidth = 40;
+    const width = Math.max(terminalWidth, minWidth);
+    
+    // Calcula o tamanho do banner baseado na largura do terminal
+    const title = 'LLM-CLI v2.0.0';
+    const subtitle = 'AI Development Assistant';
+    
+    // Centraliza o título e subtítulo
+    const titlePadding = Math.max(0, Math.floor((width - title.length - 4) / 2));
+    const subtitlePadding = Math.max(0, Math.floor((width - subtitle.length - 4) / 2));
+    
     const lines = [
       '',
-      chalk.hex('#6366F1')('╭─ LLM-CLI v2.0.0 ──────────────────────────────╮'),
-      chalk.hex('#6366F1')('│  AI Development Assistant                     │'),
-      chalk.hex('#6366F1')('╰───────────────────────────────────────────────╯'),
+      chalk.hex('#6366F1')(`╭─${'─'.repeat(titlePadding)}${title}${'─'.repeat(titlePadding)}─╮`),
+      chalk.hex('#6366F1')(`│${' '.repeat(subtitlePadding)}${subtitle}${' '.repeat(subtitlePadding)}│`),
+      chalk.hex('#6366F1')(`╰─${'─'.repeat(width - 4)}─╯`),
       '',
       chalk.gray('Type your message below to start chatting...'),
       chalk.gray('Commands: help • clear • status • exit'),
@@ -162,24 +178,30 @@ export class CLI {
   }
 
   private showHelp(): void {
+    const terminalWidth = process.stdout.columns || 80;
+    const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
+    
     console.log(chalk.hex('#6366F1')('\nCommands:'));
-    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.gray(`━━${separator}━━`));
     console.log(chalk.white('  help     - Show this help'));
     console.log(chalk.white('  clear    - Clear screen'));
     console.log(chalk.white('  status   - Show status'));
     console.log(chalk.white('  exit     - Exit'));
-    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.gray(`━━${separator}━━`));
     console.log(chalk.gray('\nJust type your message to start chatting...\n'));
   }
 
   private showStatus(): void {
+    const terminalWidth = process.stdout.columns || 80;
+    const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
+    
     console.log(chalk.hex('#6366F1')('\nStatus:'));
-    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.gray(`━━${separator}━━`));
     console.log(chalk.white(`  Model: ${this.getCurrentModel()}`));
     console.log(chalk.white(`  Plan: ${this.currentPlan ? this.currentPlan.title : 'None'}`));
     console.log(chalk.white(`  Step: ${this.currentPlan ? this.currentStepIndex + 1 : 0}/${this.currentPlan?.steps.length || 0}`));
     console.log(chalk.white(`  History: ${this.conversationContext.getConversationHistory().length} messages`));
-    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.gray(`━━${separator}━━`));
     console.log('');
   }
 
@@ -228,9 +250,11 @@ export class CLI {
       // Adiciona a resposta do assistente ao contexto
       this.conversationContext.addMessage('assistant', response.content);
       
-      // Exibe a resposta com design minimalista
-      console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-      console.log(chalk.white(response.content));
+      // Exibe a resposta com design minimalista e cor apropriada
+      const terminalWidth = process.stdout.columns || 80;
+      const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
+      console.log(chalk.gray(`━━${separator}━━`));
+      console.log(chalk.hex('#E5E7EB')(response.content)); // Cor cinza clara para melhor legibilidade
       
       // Se for uma resposta de código, oferece para salvar
       if (response.type === 'code') {
