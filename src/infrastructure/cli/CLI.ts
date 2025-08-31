@@ -142,16 +142,14 @@ export class CLI {
   }
 
   private getBannerContent(): string {
-    const title = '╔══════════════════════════════════════╗';
-    const titleText = '║            LLM-CLI v2.0.0           ║';
-    const subtitle = '║  Assistente de IA para Desenvolvimento ║';
-    const footer = '╚══════════════════════════════════════╝';
-    
     const lines = [
-      chalk.hex('#8B5CF6')(title),
-      chalk.hex('#7C3AED')(titleText),
-      chalk.hex('#6D28D9')(subtitle),
-      chalk.hex('#8B5CF6')(footer),
+      chalk.hex('#8B5CF6')('╭─────────────────────────────────────────╮'),
+      chalk.hex('#7C3AED')('│           🚀 LLM-CLI v2.0.0            │'),
+      chalk.hex('#6D28D9')('│      AI Development Assistant           │'),
+      chalk.hex('#8B5CF6')('╰─────────────────────────────────────────╯'),
+      '',
+      chalk.gray('💡 Type "help" for commands • "exit" to quit'),
+      chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'),
       ''
     ];
     
@@ -163,23 +161,28 @@ export class CLI {
   }
 
   private showHelp(): void {
-    console.log(chalk.cyan('\n📚 Comandos Disponíveis:'));
-    console.log(chalk.white('  help     - Mostra esta ajuda'));
-    console.log(chalk.white('  clear    - Limpa a tela e mostra o banner'));
-    console.log(chalk.white('  status   - Mostra status atual da CLI'));
-    console.log(chalk.white('  exit     - Sai da aplicação'));
-    console.log(chalk.white('  quit     - Sai da aplicação'));
-    console.log(chalk.cyan('\n💬 Para usar o chat, apenas digite sua mensagem!'));
-    console.log(chalk.gray('   Exemplo: "Como criar uma API REST?"\n'));
+    console.log(chalk.hex('#8B5CF6')('\n📚 Available Commands:'));
+    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.white('  help     - Show this help'));
+    console.log(chalk.white('  clear    - Clear screen and show banner'));
+    console.log(chalk.white('  status   - Show current CLI status'));
+    console.log(chalk.white('  exit     - Exit application'));
+    console.log(chalk.white('  quit     - Exit application'));
+    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.hex('#8B5CF6')('\n💬 To chat, just type your message!'));
+    console.log(chalk.gray('   Example: "How to create a REST API?"\n'));
   }
 
   private showStatus(): void {
-    console.log(chalk.cyan('\n📊 Status da CLI:'));
-    console.log(chalk.white(`  Modelo ativo: ${this.getCurrentModel()}`));
-    console.log(chalk.white(`  Plano atual: ${this.currentPlan ? this.currentPlan.title : 'Nenhum'}`));
-    console.log(chalk.white(`  Passo atual: ${this.currentPlan ? this.currentStepIndex + 1 : 0}/${this.currentPlan?.steps.length || 0}`));
-    console.log(chalk.white(`  Streaming: ${this.isStreaming ? 'Ativo' : 'Inativo'}`));
-    console.log(chalk.white(`  Histórico: ${this.conversationContext.getConversationHistory().length} mensagens\n`));
+    console.log(chalk.hex('#8B5CF6')('\n📊 CLI Status:'));
+    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.white(`  Active Model: ${this.getCurrentModel()}`));
+    console.log(chalk.white(`  Current Plan: ${this.currentPlan ? this.currentPlan.title : 'None'}`));
+    console.log(chalk.white(`  Current Step: ${this.currentPlan ? this.currentStepIndex + 1 : 0}/${this.currentPlan?.steps.length || 0}`));
+    console.log(chalk.white(`  Streaming: ${this.isStreaming ? 'Active' : 'Inactive'}`));
+    console.log(chalk.white(`  History: ${this.conversationContext.getConversationHistory().length} messages`));
+    console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log('');
   }
 
   private isImplementationRequest(input: string): boolean {
@@ -227,20 +230,22 @@ export class CLI {
       // Adiciona a resposta do assistente ao contexto
       this.conversationContext.addMessage('assistant', response.content);
       
-      // Exibe a resposta
-      console.log(chalk.cyan('\n💬 Resposta:'));
+      // Exibe a resposta com design moderno
+      console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+      console.log(chalk.hex('#8B5CF6')('💬 AI Response:'));
       console.log(chalk.white(response.content));
       
       // Se for uma resposta de código, oferece para salvar
       if (response.type === 'code') {
-        console.log(chalk.yellow('\n💡 Detectei código na resposta!'));
-        const shouldSave = await this.askForConfirmation('Deseja salvar este código em um arquivo?');
+        console.log(chalk.hex('#F59E0B')('\n💻 Code detected!'));
+        const shouldSave = await this.askForConfirmation('Save this code to a file?');
         if (shouldSave) {
           await this.saveCodeToFile(response.content);
         }
       }
       
-      console.log(''); // Linha em branco para separar
+      console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+      console.log('');
       
     } catch (error) {
       this.clearSpinner(spinner);
@@ -261,8 +266,8 @@ export class CLI {
       
       // Salva o arquivo usando o serviço de arquivo
       // TODO: Implementar acesso ao serviço de arquivo
-      console.log(chalk.yellow(`\n💾 Arquivo seria salvo como: ${fileName}`));
-      console.log(chalk.gray('   (Funcionalidade de salvamento em desenvolvimento)'));
+      console.log(chalk.hex('#F59E0B')(`\n💾 File would be saved as: ${fileName}`));
+      console.log(chalk.gray('   (File saving functionality in development)'));
       
     } catch (error) {
       console.error(chalk.red('\n❌ Erro ao salvar arquivo:'), error);

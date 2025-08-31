@@ -59,28 +59,30 @@ Explicação: 1-2 frases sobre o código`;
   }
 
   private isCodeRequest(content: string): boolean {
-    const codeKeywords = [
-      // General programming terms
-      'código', 'exemplo', 'implementar', 'função', 'classe', 'método', 'loop', 
-      'condicional', 'variável', 'constante', 'programa', 'algoritmo', 'estrutura de dados',
-      
-      // Common programming languages
-      'python', 'javascript', 'typescript', 'java', 'c#', 'c++', 'c', 'go', 'rust', 'ruby',
-      'php', 'swift', 'kotlin', 'dart', 'r', 'matlab', 'perl', 'scala', 'haskell', 'elixir',
-      
-      // Web technologies
-      'html', 'css', 'react', 'angular', 'vue', 'node', 'express', 'django', 'flask', 'spring',
-      
-      // Database
-      'sql', 'mysql', 'postgresql', 'mongodb', 'redis', 'oracle', 'sqlite'
-    ];
-    
-    const normalized = content.toLowerCase();
-    return codeKeywords.some(keyword => 
-      normalized.includes(keyword) || 
-      normalized.includes(`como fazer ${keyword}`) ||
-      normalized.includes(`exemplo de ${keyword}`)
-    ) || content.includes('```');
+    // Só detecta como código se a resposta CONTÉM código real (```)
+    // Não baseado em palavras-chave da pergunta
+    return content.includes('```') && (
+      content.includes('```javascript') ||
+      content.includes('```typescript') ||
+      content.includes('```python') ||
+      content.includes('```java') ||
+      content.includes('```html') ||
+      content.includes('```css') ||
+      content.includes('```sql') ||
+      content.includes('```json') ||
+      content.includes('```bash') ||
+      content.includes('```shell') ||
+      content.includes('```yaml') ||
+      content.includes('```xml') ||
+      content.includes('```php') ||
+      content.includes('```go') ||
+      content.includes('```rust') ||
+      content.includes('```cpp') ||
+      content.includes('```c#') ||
+      content.includes('```ruby') ||
+      content.includes('```swift') ||
+      content.includes('```kotlin')
+    );
   }
 
   private isImplementationRequest(content: string): boolean {
