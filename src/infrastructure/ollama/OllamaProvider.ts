@@ -30,6 +30,29 @@ export class OllamaProvider implements ModelProvider {
   }
 
   async generateResponse(request: GenerationRequest): Promise<GenerationResponse> {
+    let fullResponse = '';
+    
+    return new Promise((resolve, reject) => {
+      this.streamResponse(request, (chunk, done) => {
+        if (chunk) {
+          fullResponse += chunk;
+        }
+        
+        if (done) {
+          // Na implementação sem streaming, apenas coletamos a resposta completa
+          // e retornamos no final
+          resolve({
+            response: fullResponse,
+            model: request.model,
+            created_at: new Date(),
+            done: true
+          });
+        }
+      }).catch(reject);
+    });
+  }
+
+  async streamResponse(request: GenerationRequest, callback: (chunk: string, done: boolean) => void, signal?: AbortSignal): Promise<GenerationResponse> {
     try {
       const payload = {
         model: request.model,
@@ -44,24 +67,69 @@ export class OllamaProvider implements ModelProvider {
           repeat_penalty: 1.1
         },
         keep_alive: '10m',
-        stream: false
+        stream: true
       };
 
-      const response = await this.makeRequest('/api/generate', 'POST', payload);
+      const url = `${this.baseUrl}/api/generate`;
+      const controller = new AbortController();
       
+      // Set up abort handling if signal is provided
+      if (signal) {
+        signal.addEventListener('abort', () => controller.abort());
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+      let done = false;
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        
+        if (value) {
+          const chunk = decoder.decode(value, { stream: !done });
+          const lines = chunk.split('\n').filter(line => line.trim() !== '');
+          
+          for (const line of lines) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.response) {
+                callback(parsed.response, false);
+                fullResponse += parsed.response;
+              }
+            } catch (e) {
+              console.error('Erro ao processar chunk:', e);
+            }
+          }
+        }
+      }
+
+      // Retorna a resposta completa quando terminar
       return {
-        response: response.response,
-        model: response.model,
-        created_at: new Date(response.created_at),
-        done: response.done,
-        context: response.context,
-        total_duration: response.total_duration,
-        load_duration: response.load_duration,
-        prompt_eval_count: response.prompt_eval_count,
-        prompt_eval_duration: response.prompt_eval_duration,
-        eval_count: response.eval_count,
-        eval_duration: response.eval_duration
+        response: fullResponse,
+        model: request.model,
+        created_at: new Date(),
+        done: true
       };
+
     } catch (error) {
       throw new Error(`Falha ao gerar resposta: ${error}`);
     }

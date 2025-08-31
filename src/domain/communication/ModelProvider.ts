@@ -1,6 +1,9 @@
+export type StreamCallback = (chunk: string, done: boolean) => void;
+
 export interface ModelProvider {
   listModels(): Promise<ModelInfo[]>;
   generateResponse(request: GenerationRequest): Promise<GenerationResponse>;
+  streamResponse(request: GenerationRequest, callback: StreamCallback, signal?: AbortSignal): Promise<GenerationResponse>;
   isAvailable(): Promise<boolean>;
   getModelInfo(modelName: string): Promise<ModelInfo>;
 }

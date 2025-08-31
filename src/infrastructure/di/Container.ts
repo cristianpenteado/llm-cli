@@ -59,8 +59,7 @@ export class Container {
         const provider = await this.resolve<ModelProvider>('ModelProvider');
         const cliConfig = await this.resolve<Configuration>('Configuration');
         const cliLogger = await this.resolve<Logger>('Logger');
-        const { SimpleCLI } = await import('../cli/SimpleCLI');
-        return new SimpleCLI(agent, provider, cliConfig, cliLogger);
+        return new CLI(agent, provider, cliConfig, cliLogger);
 
       default:
         throw new Error(`Unknown dependency: ${key}`);

@@ -1,5 +1,7 @@
+export type ChunkCallback = (chunk: string) => void;
+
 export interface Agent {
-  processQuery(query: string): Promise<AgentResponse>;
+  processQuery(query: string, onChunk?: ChunkCallback, signal?: AbortSignal): Promise<AgentResponse>;
   createPlan(task: string): Promise<TaskPlan>;
   executeStep(step: TaskStep, confirmation: ConfirmationResult): Promise<StepResult>;
   readProject(path?: string): Promise<ProjectContext>;
