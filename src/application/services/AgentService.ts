@@ -1,4 +1,4 @@
-import { Agent, AgentResponse, TaskPlan, TaskStep, ConfirmationResult, StepResult, ProjectContext, CodeSpecification, CodeResult, FileNode } from '../../domain/agent/Agent';
+import { Agent, AgentResponse, TaskPlan, TaskStep, ConfirmationResult, StepResult, ProjectContext, CodeSpecification, CodeResult, FileNode, ProjectAnalysis } from '../../domain/agent/Agent';
 import { ModelProvider } from '../../domain/communication/ModelProvider';
 import { Configuration } from '../../domain/configuration/Configuration';
 import { ConversationContext } from '../../domain/agent/ConversationContext';
@@ -17,36 +17,225 @@ export class AgentService implements Agent {
   }
 
   private buildSystemPrompt(): string {
-    return `Você é ${this.config.agent.name}, um assistente de IA especializado em desenvolvimento JavaScript/TypeScript.
+    return `Você é ${this.config.agent.name}, um assistente de IA especializado em desenvolvimento de software.
 
-Diretrizes de resposta:
-1. Priorize JavaScript/TypeScript em todas as explicações e exemplos
-2. Seja conciso e vá direto ao ponto
-3. Use português brasileiro coloquial
-4. Para exemplos de código, use TypeScript por padrão, a menos que especificado o contrário
-5. Mantenha as respostas curtas e objetivas
-6. Execute comandos do sistema apenas quando solicitado explicitamente
+# Diretrizes de Resposta
+1. Seja natural e conversacional em português brasileiro
+2. Adapte o tom conforme o contexto (técnico ou casual)
+3. Para tarefas técnicas, seja preciso e direto
+4. Use markdown para formatar respostas
 
-Quando gerar código:
-- Use TypeScript com tipagem explícita
-- Inclua apenas comentários essenciais
-- Prefira soluções nativas sem bibliotecas externas quando possível
-- Use boas práticas de Clean Code
-- Sugira testes quando apropriado
-- Explique as decisões técnicas tomadas
+# Comportamento
+- Para saudações casuais (oi, olá, etc), responda de forma amigável sem contexto técnico
+- Para perguntas técnicas, responda com profundidade adequada
+- Ao propor alterações ou criar código, siga as melhores práticas
+- Sempre que for executar uma ação, peça confirmação com [sim/skip/stop]
 
-Lembre-se: Você está em um chat interativo, então seja natural e conversacional!`;
+# Geração de Código
+- Use TypeScript/JavaScript por padrão, a menos que especificado o contrário
+- Inclua comentários explicativos
+- Siga as melhores práticas da linguagem
+- Considere casos de borda e tratamento de erros
+
+# Análise de Projeto
+- Ao analisar um projeto, identifique:
+  * Estrutura de pastas
+  * Tecnologias utilizadas
+  * Pontos de entrada
+  * Dependências
+  * Padrões de projeto identificados
+
+Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
   }
 
-  private determineResponseType(content: string): 'answer' | 'plan' | 'code' | 'error' {
-    // Lógica simples para determinar o tipo de resposta com base no conteúdo
+  private isCasualGreeting(content: string): boolean {
+    const greetings = ['oi', 'olá', 'eae', 'opa', 'oie', 'fala aí', 'bom dia', 'boa tarde', 'boa noite'];
+    const normalized = content.toLowerCase().trim().replace(/[^\w\s]/g, '');
+    return greetings.some(greeting => normalized.startsWith(greeting));
+  }
+
+  private isTechnicalQuestion(content: string): boolean {
+    const techKeywords = ['como', 'por que', 'quando', 'o que é', 'explique', 'ajuda com', 'ajuda em', 'erro', 'problema'];
+    const normalized = content.toLowerCase();
+    return techKeywords.some(keyword => normalized.includes(keyword));
+  }
+
+  private isCodeRequest(content: string): boolean {
+    const codeKeywords = ['criar', 'gerar', 'implementar', 'código', 'script', 'função', 'classe'];
+    const normalized = content.toLowerCase();
+    return codeKeywords.some(keyword => normalized.includes(keyword)) || content.includes('```');
+  }
+
+  private isProjectAnalysisRequest(content: string): boolean {
+    const analysisKeywords = ['analisar', 'entender', 'projeto', 'estrutura', 'pasta', 'arquivo'];
+    const normalized = content.toLowerCase();
+    return analysisKeywords.some(keyword => normalized.includes(keyword));
+  }
+
+  private determineResponseType(content: string): 'casual' | 'technical' | 'code' | 'plan' | 'analysis' | 'error' {
+    if (this.isCasualGreeting(content)) {
+      return 'casual';
+    }
+    if (this.isCodeRequest(content)) {
+      return 'code';
+    }
+    if (this.isProjectAnalysisRequest(content)) {
+      return 'analysis';
+    }
     if (content.toLowerCase().includes('plano:') || content.toLowerCase().includes('passo')) {
       return 'plan';
     }
-    if (content.includes('```')) {
-      return 'code';
+    return this.isTechnicalQuestion(content) ? 'technical' : 'casual';
+  }
+
+  async analyzeProjectStructure(path: string = process.cwd()): Promise<ProjectAnalysis> {
+    try {
+      // Lê a estrutura do diretório atual
+      const structure = await this.fileSystem.readDirectory(path, true);
+      // Filtra diretórios excluídos
+      const filteredStructure = structure.filter(node => 
+        !['node_modules', '.git', 'dist', 'build', 'coverage'].some(
+          exclude => node.path.includes(`/${exclude}/`) || node.path.endsWith(`/${exclude}`)
+        )
+      );
+
+      // Analisa tecnologias baseado nos arquivos encontrados
+      const technologies = this.detectTechnologies(filteredStructure);
+      
+      // Identifica pontos de entrada (ex: package.json, main.ts, app.js, etc.)
+      const entryPoints = this.findEntryPoints(filteredStructure);
+      
+      // Extrai dependências do package.json se existir
+      const dependencies = await this.extractDependencies(path);
+      
+      // Gera um resumo da análise
+      const summary = this.generateAnalysisSummary(filteredStructure, technologies, entryPoints);
+      
+      return {
+        structure,
+        technologies,
+        entryPoints,
+        dependencies,
+        designPatterns: this.identifyDesignPatterns(filteredStructure),
+        summary
+      };
+      
+    } catch (error) {
+      console.error('Erro ao analisar a estrutura do projeto:', error);
+      throw new Error('Não foi possível analisar a estrutura do projeto');
     }
-    return 'answer';
+  }
+
+  private detectTechnologies(structure: FileNode[]): string[] {
+    const techs = new Set<string>();
+    
+    const checkFiles = (nodes: FileNode[]) => {
+      for (const node of nodes) {
+        if (node.type === 'file') {
+          if (node.name.endsWith('.ts') || node.name.endsWith('.tsx')) {
+            techs.add('TypeScript');
+            if (node.name.endsWith('.tsx') || node.name.endsWith('.jsx')) {
+              techs.add('React');
+            }
+          } else if (node.name.endsWith('.js')) {
+            techs.add('JavaScript');
+          } else if (node.name.endsWith('.vue')) {
+            techs.add('Vue.js');
+          } else if (node.name.endsWith('.svelte')) {
+            techs.add('Svelte');
+          } else if (node.name === 'package.json') {
+            techs.add('Node.js');
+          } else if (node.name === 'requirements.txt') {
+            techs.add('Python');
+          } else if (node.name === 'pom.xml') {
+            techs.add('Java');
+          }
+        } else if (node.type === 'directory' && node.children) {
+          checkFiles(node.children);
+        }
+      }
+    };
+
+    checkFiles(structure);
+    return Array.from(techs);
+  }
+
+  private findEntryPoints(structure: FileNode[]): string[] {
+    const entryPoints: string[] = [];
+    
+    // Procura por arquivos de entrada comuns
+    const commonEntryPoints = [
+      'main.ts', 'index.ts', 'app.ts', 'server.ts',
+      'main.js', 'index.js', 'app.js', 'server.js',
+      'App.tsx', 'App.jsx', 'main.tsx', 'main.jsx'
+    ];
+    
+    structure.forEach(node => {
+      if (node.type === 'file' && commonEntryPoints.includes(node.name)) {
+        entryPoints.push(node.path);
+      }
+    });
+    
+    return entryPoints;
+  }
+
+  private async extractDependencies(path: string): Promise<string[]> {
+    try {
+      const packageJsonPath = `${path}/package.json`;
+      if (await this.fileSystem.exists(packageJsonPath)) {
+        const content = await this.fileSystem.readFile(packageJsonPath);
+        const pkg = JSON.parse(content);
+        
+        const deps = [
+          ...Object.keys(pkg.dependencies || {}),
+          ...Object.keys(pkg.devDependencies || {})
+        ];
+        
+        return Array.from(new Set(deps)); // Remove duplicatas
+      }
+      return [];
+    } catch (error) {
+      console.warn('Erro ao extrair dependências:', error);
+      return [];
+    }
+  }
+
+  private identifyDesignPatterns(structure: FileNode[]): string[] {
+    const patterns: string[] = [];
+    
+    // Análise simplificada de padrões com base na estrutura de pastas
+    const hasComponents = structure.some(node => 
+      node.type === 'directory' && 
+      (node.name === 'components' || node.name === 'views')
+    );
+    
+    const hasServices = structure.some(node => 
+      node.type === 'directory' && node.name === 'services'
+    );
+    
+    const hasHooks = structure.some(node => 
+      node.type === 'directory' && 
+      (node.name === 'hooks' || node.name === 'composables')
+    );
+    
+    if (hasComponents) patterns.push('Component-based Architecture');
+    if (hasServices) patterns.push('Service Layer');
+    if (hasHooks) patterns.push('Custom Hooks/Composables');
+    
+    return patterns;
+  }
+
+  private generateAnalysisSummary(
+    structure: FileNode[],
+    technologies: string[],
+    entryPoints: string[]
+  ): string {
+    const fileCount = structure.filter(n => n.type === 'file').length;
+    const dirCount = structure.filter(n => n.type === 'directory').length;
+    
+    return `Projeto com ${fileCount} arquivos e ${dirCount} diretórios.\n` +
+           `Tecnologias principais: ${technologies.join(', ')}\n` +
+           `Pontos de entrada: ${entryPoints.length > 0 ? entryPoints.join(', ') : 'Não identificados'}`;
   }
 
   async processQuery(query: string, onChunk?: (chunk: string) => void, signal?: AbortSignal): Promise<AgentResponse> {
@@ -54,26 +243,29 @@ Lembre-se: Você está em um chat interativo, então seja natural e conversacion
       // Adiciona a mensagem do usuário ao contexto
       this.conversationContext.addMessage('user', query);
       
+      // Determina o tipo de resposta necessário
+      let responseType = this.determineResponseType(query);
+      
       // Prepara o prompt com as instruções do sistema e histórico
       const systemPrompt = this.buildSystemPrompt();
-      const history = this.conversationContext.getFormattedHistory();
       
-      // Combina tudo em um prompt estruturado
-      const fullPrompt = `${systemPrompt}
-
-Histórico da conversa:
-${history}
-
-Usuário: ${query}
-
-Resposta:`;
+      // Adiciona contexto adicional baseado no tipo de resposta
+      let context = '';
       
-      // Obtém a resposta do modelo
+      if (responseType === 'analysis') {
+        try {
+          const analysis = await this.analyzeProjectStructure();
+          context = `## Análise do Projeto Atual\n${analysis.summary}\n\n`;
+        } catch (error) {
+          console.warn('Erro ao analisar o projeto:', error);
+          context = 'Não foi possível analisar o projeto. Continuando sem contexto adicional.\n\n';
+        }
+      }
+      
       let fullResponse = '';
-      let responseType: 'answer' | 'plan' | 'code' | 'error' = 'answer';
       
-      // Se tivermos um callback de streaming, usamos streamResponse
       if (onChunk) {
+        // Caso com streaming
         await this.modelProvider.streamResponse(
           {
             model: this.config.model.defaultModel,
@@ -82,21 +274,13 @@ Resposta:`;
             options: {
               temperature: this.config.model.temperature,
               num_predict: this.config.model.maxTokens
-            },
-            stream: true
-          },
-          (chunk: string, done: boolean) => {
-            if (signal?.aborted) {
-              return; // Skip processing if aborted
             }
+          },
+          (chunk, done) => {
             fullResponse += chunk;
-            onChunk?.(chunk);
-            if (done) {
-              this.conversationContext.addMessage('assistant', fullResponse);
-              responseType = this.determineResponseType(fullResponse);
-            }
+            onChunk(chunk);
           },
-          signal // Pass the abort signal to the model provider
+          signal
         );
       } else {
         // Caso sem streaming
@@ -109,11 +293,12 @@ Resposta:`;
             num_predict: this.config.model.maxTokens
           }
         });
-        
         fullResponse = response.response;
-        responseType = this.determineResponseType(fullResponse);
-        this.conversationContext.addMessage('assistant', fullResponse);
       }
+      
+      // Atualiza o contexto da conversa
+      this.conversationContext.addMessage('assistant', fullResponse);
+      responseType = this.determineResponseType(fullResponse);
       
       return {
         content: fullResponse,
@@ -268,36 +453,6 @@ ${specification.requirements.join('\n')}
     };
   }
 
-  private detectTechnologies(structure: FileNode[]): string[] {
-    const techs = new Set<string>();
-    
-    const checkFiles = (nodes: FileNode[]) => {
-      for (const node of nodes) {
-        if (node.type === 'file') {
-          if (node.name.endsWith('.ts') || node.name.endsWith('.tsx')) {
-            techs.add('TypeScript');
-          } else if (node.name.endsWith('.js') || node.name.endsWith('.jsx')) {
-            techs.add('JavaScript');
-          } else if (node.name.endsWith('.css')) {
-            techs.add('CSS');
-          } else if (node.name.endsWith('.html')) {
-            techs.add('HTML');
-          } else if (node.name === 'package.json') {
-            techs.add('Node.js');
-          } else if (node.name === 'Dockerfile') {
-            techs.add('Docker');
-          } else if (node.name.endsWith('.py')) {
-            techs.add('Python');
-          }
-        } else if (node.type === 'directory' && node.children) {
-          checkFiles(node.children);
-        }
-      }
-    };
-
-    checkFiles(structure);
-    return Array.from(techs);
-  }
 
   private async readPackageJson(projectPath: string): Promise<{ dependencies?: Record<string, string>; description?: string } | null> {
     try {

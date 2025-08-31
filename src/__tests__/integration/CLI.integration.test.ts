@@ -18,12 +18,14 @@ describe('CLI Integration Tests', () => {
       createPlan: jest.fn(),
       executeStep: jest.fn(),
       readProject: jest.fn(),
-      generateCode: jest.fn()
+      generateCode: jest.fn(),
+      analyzeProjectStructure: jest.fn()
     };
 
     mockModelProvider = {
       listModels: jest.fn(),
       generateResponse: jest.fn(),
+      streamResponse: jest.fn(),
       isAvailable: jest.fn(),
       getModelInfo: jest.fn()
     };
@@ -48,8 +50,8 @@ describe('CLI Integration Tests', () => {
   describe('Agent Integration', () => {
     it('should process queries through the agent', async () => {
       mockAgent.processQuery.mockResolvedValue({
-        content: 'Test response',
-        type: 'answer',
+        content: 'Resposta de teste',
+        type: 'technical',
         metadata: { model: 'llama3.2', duration: 1000 }
       });
 

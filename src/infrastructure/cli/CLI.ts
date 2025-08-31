@@ -31,18 +31,19 @@ export class CLI {
   }
 
   private initializeUI(): void {
-    // Limpar a tela
+    // Clear the screen and show banner immediately
     console.clear();
+    process.stdout.write(this.getBannerContent());
     
-    // Mostrar o banner
-    console.log(this.getBannerContent());
-    
-    // Configurar o tratamento de SIGINT
+    // Set up SIGINT handler
     process.on('SIGINT', () => {
       console.log(chalk.yellow('\nTchau! 👋'));
       if (this.rl) this.rl.close();
       process.exit(0);
     });
+    
+    // Force immediate output
+    process.stdout.write('');
   }
 
   private getBannerContent(): string {
@@ -54,41 +55,61 @@ export class CLI {
 ███████╗███████╗██║ ╚═╝ ██║    ╚██████╗███████╗██║
 ╚══════╝╚══════╝╚═╝     ╚═╝     ╚═════╝╚══════╝╚═╝
 
-                ${chalk.bold('AI Agent Terminal')}
-        Desenvolvido para a comunidade ❤️\n`);
+     Agente de programação para Ollama v1.0.0
+     Desenvolvido para a comunidade ❤️\n`);
   }
 
   async run(selectedModel?: string): Promise<void> {
     try {
+      // Set selected model if provided
       if (selectedModel) {
         this.config.model.defaultModel = selectedModel;
       }
       
+      // Check Ollama connection
       await this.checkOllamaConnection();
+      
+      // Clear screen and show banner immediately
+      console.clear();
+      console.log(this.getBannerContent());
+      
+      // Initialize the rest of the UI
       this.initializeUI();
-      this.startInteractiveSession();
+      
+      // Start the interactive session
+      await this.startInteractiveSession();
       
     } catch (error) {
-      console.error('Erro ao iniciar a aplicação:', error);
+      console.error('\nErro ao iniciar a aplicação:', error);
       process.exit(1);
     }
   }
 
-  private renderChatHistory(): void {
+  private renderChatHistory(showBanner: boolean = true): void {
     console.clear();
+    
+    // Always show banner at the top when clearing the screen
     console.log(this.getBannerContent());
     
-    for (const message of this.chatHistory) {
-      const prefix = message.role === 'user' 
-        ? chalk.cyan('\n[Você]\n> ') 
-        : chalk.green('\n[LLM]\n');
-      
-      console.log(prefix + message.content);
-    }
-    
+    // Show chat history if there are any messages
     if (this.chatHistory.length > 0) {
-      const terminalWidth = process.stdout.columns || 80;
-      console.log('\n' + '-'.repeat(terminalWidth) + '\n');
+      console.log(chalk.blue('\n📝 Histórico da Conversa:\n'));
+      
+      for (let i = 0; i < this.chatHistory.length; i++) {
+        const message = this.chatHistory[i];
+        
+        const prefix = message.role === 'user' 
+          ? chalk.cyan('👤 Você: ') 
+          : chalk.green('🤖 AI: ');
+        
+        console.log(prefix + message.content);
+        
+        // Add separator between messages
+        if (i < this.chatHistory.length - 1) {
+          const terminalWidth = process.stdout.columns || 80;
+          console.log('\n' + '─'.repeat(Math.min(terminalWidth, 60)) + '\n');
+        }
+      }
     }
   }
 
@@ -216,14 +237,9 @@ export class CLI {
   private async handleInput(input: string): Promise<void> {
     if (!input.trim()) return;
 
-    // Add to chat history
-    this.chatHistory.push({ role: 'user', content: input });
-    this.renderChatHistory();
-
-    // Process special commands
+    // Process special commands first
     const command = input.trim().toLowerCase();
     if (command === 'clear') {
-      console.clear();
       this.chatHistory = [];
       this.renderChatHistory();
       return;
@@ -235,6 +251,12 @@ export class CLI {
       return;
     }
 
+    // Add to chat history
+    this.chatHistory.push({ role: 'user', content: input });
+    
+    // Show user input immediately
+    console.log('\n' + chalk.cyan('[Você]') + '\n> ' + input);
+    
     // Check if it's a search request
     if (input.toLowerCase().startsWith('pesquise') || input.toLowerCase().startsWith('pesquisar')) {
       const spinner = this.showSpinner();
@@ -265,15 +287,9 @@ export class CLI {
     const spinner = this.showSpinner();
     
     try {
-      // Adiciona a mensagem do usuário ao contexto e histórico
-      this.conversationContext.addMessage('user', input);
-      this.chatHistory.push({ role: 'user', content: input });
-      
-      // Verifica se é uma busca
-      if (this.webSearchService.isSearchQuery(input)) {
-        await this.handleSearchRequest(input, spinner);
-        return;
-      }
+      // Add user message to context with clear instruction
+      const userMessage = `Instrução: ${input}\n\nPor favor, forneça uma resposta direta e objetiva, focada apenas no que foi solicitado.`;
+      this.conversationContext.addMessage('user', userMessage);
 
       // Prepara o prompt com o histórico da conversa
       const isImplementationRequest = this.detectImplementationRequest(input);
@@ -312,14 +328,17 @@ export class CLI {
             fullResponse = buffer;
           };
           
-          const processPromise = this.agent.processQuery(enhancedPrompt, onChunk, this.currentStreamAbortController.signal)
-            .then(response => ({
-              ...response,
-              content: buffer
-            }));
+          const processPromise = this.agent.processQuery(
+            enhancedPrompt, 
+            onChunk, 
+            this.currentStreamAbortController?.signal
+          ).then(response => ({
+            ...response,
+            content: buffer
+          }));
           
           const timeoutPromise = new Promise<never>((_, rej) => 
-            setTimeout(() => rej(new Error('Timeout: Resposta demorou mais que 60s')), 60000)
+            setTimeout(() => rej(new Error('Ainda estou processando sua solicitação. Por favor, aguarde mais um pouco...')), 120000) // 2 minutes timeout
           );
           
           Promise.race([processPromise, timeoutPromise])
@@ -341,28 +360,25 @@ export class CLI {
           console.log(chalk.gray(`\n⏱️  Modelo: ${response.metadata.model} | Duração: ${Math.round((response.metadata.duration || 0) / 1000000)}ms`));
         }
       } catch (error: any) {
-        if (error.name !== 'AbortError') {
-          throw error; // Re-throw se não for uma interrupção do usuário
+        this.clearSpinner(spinner);
+        if (error.name === 'AbortError') {
+          console.log(chalk.yellow('\nOperação interrompida pelo usuário'));
+        } else {
+          console.log(chalk.yellow('\n' + (error.message || 'Ocorreu um erro ao processar sua solicitação')));
         }
+      } finally {
+        this.isStreaming = false;
+        this.currentStreamAbortController = null;
+        this.isProcessing = false;
+        console.log('\n');
       }
     } catch (error: any) {
       this.clearSpinner(spinner);
-      if (!error.message.includes('interrompida pelo usuário')) {
-        console.log(chalk.red('\n[Erro]'));
-        if (error.message.includes('Timeout')) {
-          console.log(chalk.yellow('⏰ O modelo está demorando para responder. Tente:'));
-          console.log(chalk.gray('  • Reiniciar o Ollama: ollama serve'));
-          console.log(chalk.gray('  • Verificar se o modelo está carregado: ollama ps'));
-          console.log(chalk.gray('  • Testar diretamente: ollama run phi3:mini "oi"'));
-        } else {
-          console.log(chalk.red(`Erro: ${error.message}`));
-        }
-      }
+      console.log(chalk.yellow('\n' + (error.message || 'Ocorreu um erro ao processar sua solicitação')));
     } finally {
+      this.isProcessing = false;
       this.isStreaming = false;
       this.currentStreamAbortController = null;
-      this.isProcessing = false;
-      console.log('\n'); // Adiciona uma linha em branco após cada interação
     }
   }
 
@@ -435,7 +451,9 @@ export class CLI {
   private async askExecuteCommands(): Promise<boolean> {
     return new Promise((resolve) => {
       // Pause the main readline interface to avoid conflicts
-      this.rl.pause();
+      if (this.rl) {
+        this.rl.pause();
+      }
       
       const confirmRl = readline.createInterface({
         input: process.stdin,
@@ -444,7 +462,9 @@ export class CLI {
       
       confirmRl.question(chalk.yellow('Executar os comandos sugeridos? [s/n]: '), (answer) => {
         confirmRl.close();
-        this.rl.resume();
+        if (this.rl) {
+          this.rl.resume();
+        }
         const response = answer.toLowerCase().trim();
         resolve(['sim', 's', 'yes', 'y'].includes(response));
       });
@@ -453,7 +473,9 @@ export class CLI {
 
   private async askCreatePlan(): Promise<boolean> {
     return new Promise((resolve) => {
-      this.rl.pause();
+      if (this.rl) {
+        this.rl.pause();
+      }
       
       const confirmRl = readline.createInterface({
         input: process.stdin,
@@ -462,7 +484,9 @@ export class CLI {
       
       confirmRl.question(chalk.yellow('Quer que eu crie um plano detalhado para isso? [s/n]: '), (answer) => {
         confirmRl.close();
-        this.rl.resume();
+        if (this.rl) {
+          this.rl.resume();
+        }
         const response = answer.toLowerCase().trim();
         resolve(['sim', 's', 'yes', 'y'].includes(response));
       });
@@ -472,7 +496,9 @@ export class CLI {
   private async askExecutePlan(): Promise<boolean> {
     if (!this.rl) return false;
     return new Promise((resolve) => {
-      this.rl.pause();
+      if (this.rl) {
+        this.rl.pause();
+      }
       
       const confirmRl = readline.createInterface({
         input: process.stdin,
@@ -481,7 +507,9 @@ export class CLI {
       
       confirmRl.question(chalk.yellow('Executar o plano agora? [s/n]: '), (answer) => {
         confirmRl.close();
-        this.rl.resume();
+        if (this.rl) {
+          this.rl.resume();
+        }
         const response = answer.toLowerCase().trim();
         resolve(['sim', 's', 'yes', 'y'].includes(response));
       });
@@ -507,31 +535,40 @@ export class CLI {
   }
 
   private async executeSystemCommand(command: string): Promise<void> {
-    console.log(chalk.yellow(`\n⚡ Executando: ${command}`));
+    if (!command) return;
+    
+    console.log(chalk.yellow(`\n⚡ Executing: ${command}`));
     
     try {
       // Here you would implement actual command execution
       // For now, we'll simulate it
-      console.log(chalk.green(`✅ Comando executado: ${command}`));
+      console.log(chalk.green(`✅ Command executed: ${command}`));
     } catch (error) {
-      console.log(chalk.red(`❌ Erro ao executar comando: ${error}`));
+      console.error(chalk.red(`❌ Error executing command: ${error}`));
+      throw error; // Re-throw to allow proper error handling upstream
     }
   }
 
   private buildContextualPrompt(input: string, isImplementationRequest: boolean = false): string {
+    // Start with clear instructions
+    let prompt = `You are a programming assistant focused on helping with JavaScript/TypeScript. 
+Keep responses direct and focused on what was asked.`;
+    
+    // Add conversation history
+    prompt += `\n\n${this.conversationContext.getFormattedHistory()}`;
+    
+    // Add specific instructions for implementation requests
     if (isImplementationRequest) {
-      return `${input}
-
-Por favor, forneça uma implementação detalhada em TypeScript.
-Inclua comentários explicativos e siga as melhores práticas de código.
-Seja claro, direto e útil sem ser excessivamente formal`;
-    } else {
-      return `${input}
-
-Responda de forma natural, amigável e conversacional. Adapte sua linguagem ao contexto da pergunta.
-Sempre use TypeScript nos exemplos de código, a menos que especificamente solicitado outra linguagem.
-Seja claro e útil, mas mantenha um tom descontraído e acessível.`;
+      const config = this.getImplementationConfig();
+      if (config && config.promptPrefix) {
+        prompt += `\n\n${config.promptPrefix}`;
+      }
     }
+    
+    // Add the current input with clear instruction
+    prompt += `\n\nInstruction: ${input}\n\nResponse: `;
+    
+    return prompt;
   }
 
 
