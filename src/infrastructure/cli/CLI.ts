@@ -48,6 +48,9 @@ export class CLI {
       console.log(chalk.gray(`━━${separator}━━`));
       console.log('');
       
+      // Área de digitação destacada
+      this.showInputPrompt();
+      
       this.rl.on('line', async (input) => {
         if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'quit') {
           this.rl.close();
@@ -90,6 +93,9 @@ export class CLI {
         const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
         console.log(chalk.gray(`━━${separator}━━`));
         console.log('');
+        
+        // Mostra o prompt destacado novamente
+        this.showInputPrompt();
         return;
       }
       
@@ -175,6 +181,20 @@ export class CLI {
 
   private getCurrentModel(): string {
     return 'default'; // TODO: Implementar rastreamento do modelo atual
+  }
+
+  private showInputPrompt(): void {
+    const terminalWidth = process.stdout.columns || 80;
+    const promptWidth = Math.min(terminalWidth - 4, 60);
+    
+    // Cria uma caixa visual destacada para a área de digitação
+    console.log(chalk.hex('#6366F1')('╭─' + '─'.repeat(promptWidth) + '─╮'));
+    console.log(chalk.hex('#6366F1')('│') + chalk.white(' Type your message here...') + chalk.hex('#6366F1')('│'));
+    console.log(chalk.hex('#6366F1')('╰─' + '─'.repeat(promptWidth) + '─╯'));
+    console.log('');
+    
+    // Prompt visual claro e destacado
+    console.log(chalk.hex('#10B981')('┌─ ') + chalk.white('You: ') + chalk.hex('#10B981')('▸'));
   }
 
   private showHelp(): void {
@@ -265,8 +285,11 @@ export class CLI {
         }
       }
       
-      console.log(chalk.gray('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+      console.log(chalk.gray(`━━${separator}━━`));
       console.log('');
+      
+      // Mostra claramente onde o usuário pode digitar novamente
+      this.showInputPrompt();
       
     } catch (error) {
       this.clearSpinner(spinner);
