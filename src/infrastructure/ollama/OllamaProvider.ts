@@ -30,26 +30,64 @@ export class OllamaProvider implements ModelProvider {
   }
 
   async generateResponse(request: GenerationRequest): Promise<GenerationResponse> {
-    let fullResponse = '';
-    
-    return new Promise((resolve, reject) => {
-      this.streamResponse(request, (chunk, done) => {
-        if (chunk) {
-          fullResponse += chunk;
-        }
+    try {
+      const payload = {
+        model: request.model,
+        prompt: request.prompt,
+        system: request.system,
+        context: request.context,
+        options: {
+          ...request.options,
+          num_predict: 2048,
+          temperature: 0.3,
+          top_p: 0.9,
+          repeat_penalty: 1.1
+        },
+        keep_alive: '10m',
+        stream: false
+      };
+
+      const url = `${this.baseUrl}/api/generate`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, this.config.timeout);
+      
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
         
-        if (done) {
-          // Na implementação sem streaming, apenas coletamos a resposta completa
-          // e retornamos no final
-          resolve({
-            response: fullResponse,
-            model: request.model,
-            created_at: new Date(),
-            done: true
-          });
-        }
-      }).catch(reject);
-    });
+        clearTimeout(timeoutId);
+        
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json() as any;
+      
+      return {
+        response: result.response || 'Erro: resposta vazia',
+        model: request.model,
+        created_at: new Date(),
+        done: true
+      };
+      
+    } catch (error) {
+      throw new Error(`Falha ao gerar resposta: ${error}`);
+    }
   }
 
   async streamResponse(request: GenerationRequest, callback: (chunk: string, done: boolean) => void, signal?: AbortSignal): Promise<GenerationResponse> {
@@ -115,11 +153,22 @@ export class OllamaProvider implements ModelProvider {
                 callback(parsed.response, false);
                 fullResponse += parsed.response;
               }
+              // Verifica se o stream terminou
+              if (parsed.done) {
+                done = true;
+                callback('', true); // Chama callback com done = true
+                break;
+              }
             } catch (e) {
-              console.error('Erro ao processar chunk:', e);
+              // Ignora erros de parsing, continua processando
             }
           }
         }
+      }
+      
+      // Garante que o callback final seja chamado
+      if (!done) {
+        callback('', true);
       }
 
       // Retorna a resposta completa quando terminar

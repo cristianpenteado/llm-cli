@@ -4,6 +4,8 @@ import { Configuration } from '../../domain/configuration/Configuration';
 import { ConversationContext } from '../../domain/agent/ConversationContext';
 import { FileSystemService } from '../ports/FileSystemService';
 import { v4 as uuidv4 } from 'uuid';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 export class AgentService implements Agent {
   private conversationContext: ConversationContext;
@@ -17,35 +19,31 @@ export class AgentService implements Agent {
   }
 
   private buildSystemPrompt(): string {
-    return `Você é ${this.config.agent.name}, um assistente de IA especializado em desenvolvimento de software.
+    return `Você é ${this.config.agent.name}, um assistente de programação versátil e experiente.
 
 # Diretrizes de Resposta
 1. Seja natural e conversacional em português brasileiro
-2. Adapte o tom conforme o contexto (técnico ou casual)
-3. Para tarefas técnicas, seja preciso e direto
-4. Use markdown para formatar respostas
+2. Forneça respostas diretas e objetivas
+3. Use markdown para formatar respostas
 
 # Comportamento
-- Para saudações casuais (oi, olá, etc), responda de forma amigável sem contexto técnico
-- Para perguntas técnicas, responda com profundidade adequada
-- Ao propor alterações ou criar código, siga as melhores práticas
-- Sempre que for executar uma ação, peça confirmação com [sim/skip/stop]
+- Responda de forma amigável e profissional
+- Seja conciso e vá direto ao ponto
+- Ao gerar código, use a linguagem solicitada ou a mais adequada ao contexto
 
 # Geração de Código
-- Use TypeScript/JavaScript por padrão, a menos que especificado o contrário
-- Inclua comentários explicativos
+- Use a linguagem de programação mais adequada ao contexto ou a solicitada
+- Inclua comentários explicativos quando necessário
 - Siga as melhores práticas da linguagem
 - Considere casos de borda e tratamento de erros
+- Formate o código com destaque de sintaxe apropriado
 
-# Análise de Projeto
-- Ao analisar um projeto, identifique:
-  * Estrutura de pastas
-  * Tecnologias utilizadas
-  * Pontos de entrada
-  * Dependências
-  * Padrões de projeto identificados
+# Formato de Resposta para Código
+\`\`\`linguagem
+// código aqui
+\`\`\`
 
-Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
+Explicação: 1-2 frases sobre o código`;
   }
 
   private isCasualGreeting(content: string): boolean {
@@ -61,9 +59,57 @@ Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
   }
 
   private isCodeRequest(content: string): boolean {
-    const codeKeywords = ['criar', 'gerar', 'implementar', 'código', 'script', 'função', 'classe'];
+    const codeKeywords = [
+      // General programming terms
+      'código', 'exemplo', 'implementar', 'função', 'classe', 'método', 'loop', 
+      'condicional', 'variável', 'constante', 'programa', 'algoritmo', 'estrutura de dados',
+      
+      // Common programming languages
+      'python', 'javascript', 'typescript', 'java', 'c#', 'c++', 'c', 'go', 'rust', 'ruby',
+      'php', 'swift', 'kotlin', 'dart', 'r', 'matlab', 'perl', 'scala', 'haskell', 'elixir',
+      
+      // Web technologies
+      'html', 'css', 'react', 'angular', 'vue', 'node', 'express', 'django', 'flask', 'spring',
+      
+      // Database
+      'sql', 'mysql', 'postgresql', 'mongodb', 'redis', 'oracle', 'sqlite'
+    ];
+    
     const normalized = content.toLowerCase();
-    return codeKeywords.some(keyword => normalized.includes(keyword)) || content.includes('```');
+    return codeKeywords.some(keyword => 
+      normalized.includes(keyword) || 
+      normalized.includes(`como fazer ${keyword}`) ||
+      normalized.includes(`exemplo de ${keyword}`)
+    ) || content.includes('```');
+  }
+
+  private isImplementationRequest(content: string): boolean {
+    // Palavras-chave que indicam que o usuário quer IMPLEMENTAR algo
+    const implementationKeywords = [
+      'criar', 'fazer', 'implementar', 'desenvolver', 'construir', 'gerar',
+      'adicionar', 'incluir', 'setup', 'configurar', 'instalar', 'montar',
+      'escrever', 'programar', 'codificar', 'estruturar', 'organizar'
+    ];
+    
+    // Palavras-chave que indicam que é apenas uma PERGUNTA
+    const questionKeywords = [
+      'como funciona', 'o que é', 'explique', 'entenda', 'diferenca',
+      'quando usar', 'por que', 'qual', 'quem', 'onde', 'quando'
+    ];
+    
+    const normalized = content.toLowerCase();
+    
+    // Se contém palavras de implementação E não é apenas uma pergunta
+    const hasImplementationIntent = implementationKeywords.some(keyword => 
+      normalized.includes(keyword)
+    );
+    
+    const isJustQuestion = questionKeywords.some(keyword => 
+      normalized.includes(keyword) && !hasImplementationIntent
+    );
+    
+    // Retorna true se tem intenção de implementação e não é apenas pergunta
+    return hasImplementationIntent && !isJustQuestion;
   }
 
   private isProjectAnalysisRequest(content: string): boolean {
@@ -75,6 +121,9 @@ Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
   private determineResponseType(content: string): 'casual' | 'technical' | 'code' | 'plan' | 'analysis' | 'error' {
     if (this.isCasualGreeting(content)) {
       return 'casual';
+    }
+    if (this.isImplementationRequest(content)) {
+      return 'plan'; // Se quer implementar, retorna 'plan' para criar plano
     }
     if (this.isCodeRequest(content)) {
       return 'code';
@@ -112,10 +161,11 @@ Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
       const summary = this.generateAnalysisSummary(filteredStructure, technologies, entryPoints);
       
       return {
+        files: this.extractFilePaths(filteredStructure),
         structure,
         technologies,
         entryPoints,
-        dependencies,
+        dependencies: Object.fromEntries(dependencies.map(dep => [dep, '*'])),
         designPatterns: this.identifyDesignPatterns(filteredStructure),
         summary
       };
@@ -225,6 +275,23 @@ Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
     return patterns;
   }
 
+  private extractFilePaths(structure: FileNode[]): string[] {
+    const files: string[] = [];
+    
+    const extractFiles = (nodes: FileNode[]) => {
+      for (const node of nodes) {
+        if (node.type === 'file') {
+          files.push(node.path);
+        } else if (node.type === 'directory' && node.children) {
+          extractFiles(node.children);
+        }
+      }
+    };
+    
+    extractFiles(structure);
+    return files;
+  }
+
   private generateAnalysisSummary(
     structure: FileNode[],
     technologies: string[],
@@ -238,7 +305,7 @@ Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
            `Pontos de entrada: ${entryPoints.length > 0 ? entryPoints.join(', ') : 'Não identificados'}`;
   }
 
-  async processQuery(query: string, onChunk?: (chunk: string) => void, signal?: AbortSignal): Promise<AgentResponse> {
+    async processQuery(query: string, onChunk?: (chunk: string) => void, signal?: AbortSignal): Promise<AgentResponse> {
     try {
       // Adiciona a mensagem do usuário ao contexto
       this.conversationContext.addMessage('user', query);
@@ -293,6 +360,7 @@ Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
             num_predict: this.config.model.maxTokens
           }
         });
+        
         fullResponse = response.response;
       }
       
@@ -348,53 +416,33 @@ Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
     };
   }
 
-  async executeStep(step: TaskStep, confirmation: ConfirmationResult): Promise<StepResult> {
-    if (confirmation.action === 'stop') {
+  async executeStep(step: TaskStep, confirmation: boolean): Promise<StepResult> {
+    if (!confirmation) {
       return {
         success: false,
-        error: 'Operação cancelada pelo usuário',
-        output: 'A execução foi interrompida conforme solicitado.'
-      };
-    }
-
-    if (confirmation.action === 'skip') {
-      return {
-        success: true,
-        output: `Passo "${step.title}" pulado: ${confirmation.reason || 'Sem motivo especificado'}`
+        message: 'Operação cancelada pelo usuário'
       };
     }
 
     try {
+      let message = '';
       const filesModified: string[] = [];
-      let output = '';
 
-      // Execute commands if any
-      if (step.commands && step.commands.length > 0) {
-        for (const command of step.commands) {
-          output += `Executando: ${command}\n`;
-          // Command execution would be implemented here
-        }
-      }
-
-      // Modify files if any
-      if (step.files && step.files.length > 0) {
-        for (const file of step.files) {
-          if (await this.fileSystem.exists(file)) {
-            filesModified.push(file);
-          }
-        }
+      if (step.command) {
+        const execPromise = promisify(exec);
+        await execPromise(step.command);
+        message += `Comando executado: ${step.command}\n`;
       }
 
       return {
         success: true,
-        output: `Passo "${step.title}" executado com sucesso!\n${output}`,
+        message: `Passo "${step.title}" executado com sucesso!\n${message}`,
         filesModified
       };
     } catch (error) {
       return {
         success: false,
-        error: `Erro na execução: ${error}`,
-        output: `Falha ao executar o passo: ${error}`
+        message: `Erro na execução: ${error instanceof Error ? error.message : String(error)}`
       };
     }
   }
@@ -434,6 +482,12 @@ Lembre-se: Seja útil, conciso e mantenha uma conversa natural!`;
     const fileName = `generated_${timestamp}.ts`;
     
     return {
+      code: `// Código gerado automaticamente
+// ${specification.description}
+
+${specification.requirements.join('\n')}
+
+// Implementação gerada pelo assistente de IA`,
       files: [
         {
           path: fileName,
@@ -446,10 +500,7 @@ ${specification.requirements.join('\n')}
           type: 'create' as const
         }
       ],
-      instructions: [
-        'Código gerado com sucesso!',
-        'Revise o código gerado antes de utilizá-lo em produção.'
-      ]
+      message: 'Código gerado com sucesso! Revise o código gerado antes de utilizá-lo em produção.'
     };
   }
 

@@ -44,7 +44,7 @@ Para usar o chat interativo, execute apenas: llm
   try {
     const container = new Container();
     const cli = await container.resolve<CLI>('CLI');
-    await cli.run(selectedModel);
+    await cli.run(selectedModel || 'default');
   } catch (error) {
     console.error('Fatal error:', error);
     process.exit(1);
