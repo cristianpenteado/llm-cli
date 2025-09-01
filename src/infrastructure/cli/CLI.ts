@@ -265,8 +265,11 @@ export class CLI {
     // Cabeçalho do bloco de código
     console.log(chalk.hex('#6366F1')('```' + language));
     
-    // Stream do código com syntax highlighting
-    const lines = code.split('\n');
+    // Aplica indentação automática ao código
+    const indentedCode = this.autoIndentCode(language, code);
+    
+    // Stream do código indentado com syntax highlighting
+    const lines = indentedCode.split('\n');
     
     for (const line of lines) {
       const highlightedLine = this.highlightSyntax(language, line);
@@ -402,6 +405,211 @@ export class CLI {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private autoIndentCode(language: string, code: string): string {
+    // Remove indentação existente e aplica nova indentação consistente
+    const lines = code.split('\n');
+    const indentedLines: string[] = [];
+    let indentLevel = 0;
+    const indentSize = 2; // 2 espaços por nível de indentação
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      if (trimmedLine === '') {
+        // Linha vazia mantém o nível de indentação atual
+        indentedLines.push('');
+        continue;
+      }
+      
+      // Ajusta o nível de indentação baseado na linguagem
+      const newIndentLevel = this.calculateIndentLevel(language, trimmedLine, indentLevel);
+      
+      // Aplica a indentação
+      const indent = ' '.repeat(newIndentLevel * indentSize);
+      indentedLines.push(indent + trimmedLine);
+      
+      // Atualiza o nível de indentação para a próxima linha
+      indentLevel = newIndentLevel;
+    }
+    
+    return indentedLines.join('\n');
+  }
+
+  private calculateIndentLevel(language: string, line: string, currentLevel: number): number {
+    const lowerLine = line.toLowerCase();
+    
+    switch (language.toLowerCase()) {
+      case 'javascript':
+      case 'js':
+      case 'typescript':
+      case 'ts':
+        return this.calculateJavaScriptIndent(line, currentLevel);
+      case 'python':
+      case 'py':
+        return this.calculatePythonIndent(line, currentLevel);
+      case 'html':
+        return this.calculateHTMLIndent(line, currentLevel);
+      case 'css':
+        return this.calculateCSSIndent(line, currentLevel);
+      case 'json':
+        return this.calculateJSONIndent(line, currentLevel);
+      case 'bash':
+      case 'shell':
+        return this.calculateBashIndent(line, currentLevel);
+      default:
+        return currentLevel;
+    }
+  }
+
+  private calculateJavaScriptIndent(line: string, currentLevel: number): number {
+    const lowerLine = line.toLowerCase();
+    
+    // Palavras que aumentam a indentação
+    const increaseIndent = /\b(if|else|for|while|do|switch|try|catch|finally|function|class|const|let|var)\b/;
+    
+    // Palavras que diminuem a indentação
+    const decreaseIndent = /\b(return|break|continue|throw)\b/;
+    
+    // Caracteres que aumentam a indentação
+    const hasOpeningBrace = line.includes('{');
+    const hasOpeningBracket = line.includes('[');
+    const hasOpeningParen = line.includes('(');
+    
+    // Caracteres que diminuem a indentação
+    const hasClosingBrace = line.includes('}');
+    const hasClosingBracket = line.includes(']');
+    const hasClosingParen = line.includes(')');
+    
+    let newLevel = currentLevel;
+    
+    // Ajusta baseado no conteúdo da linha
+    if (increaseIndent.test(lowerLine) && (hasOpeningBrace || hasOpeningBracket || hasOpeningParen)) {
+      newLevel++;
+    }
+    
+    if (decreaseIndent.test(lowerLine)) {
+      newLevel = Math.max(0, newLevel - 1);
+    }
+    
+    // Ajusta baseado nos caracteres de fechamento
+    if (hasClosingBrace || hasClosingBracket || hasClosingParen) {
+      newLevel = Math.max(0, newLevel - 1);
+    }
+    
+    return newLevel;
+  }
+
+  private calculatePythonIndent(line: string, currentLevel: number): number {
+    const lowerLine = line.toLowerCase();
+    
+    // Palavras que aumentam a indentação
+    const increaseIndent = /\b(if|elif|else|for|while|try|except|finally|with|def|class)\b/;
+    
+    // Palavras que diminuem a indentação
+    const decreaseIndent = /\b(return|break|continue|raise|pass)\b/;
+    
+    let newLevel = currentLevel;
+    
+    if (increaseIndent.test(lowerLine)) {
+      newLevel++;
+    }
+    
+    if (decreaseIndent.test(lowerLine)) {
+      newLevel = Math.max(0, newLevel - 1);
+    }
+    
+    return newLevel;
+  }
+
+  private calculateHTMLIndent(line: string, currentLevel: number): number {
+    const lowerLine = line.toLowerCase();
+    
+    // Tags que aumentam a indentação (tags de abertura)
+    const openingTags = /<(\w+)(?![^>]*\/>)/;
+    
+    // Tags que diminuem a indentação (tags de fechamento)
+    const closingTags = /<\/(\w+)>/;
+    
+    // Tags auto-fechadas não afetam a indentação
+    const selfClosingTags = /<(\w+)[^>]*\/>/;
+    
+    let newLevel = currentLevel;
+    
+    if (openingTags.test(lowerLine) && !selfClosingTags.test(lowerLine)) {
+      newLevel++;
+    }
+    
+    if (closingTags.test(lowerLine)) {
+      newLevel = Math.max(0, newLevel - 1);
+    }
+    
+    return newLevel;
+  }
+
+  private calculateCSSIndent(line: string, currentLevel: number): number {
+    const lowerLine = line.toLowerCase();
+    
+    // Chaves de abertura aumentam a indentação
+    const hasOpeningBrace = line.includes('{');
+    
+    // Chaves de fechamento diminuem a indentação
+    const hasClosingBrace = line.includes('}');
+    
+    let newLevel = currentLevel;
+    
+    if (hasOpeningBrace) {
+      newLevel++;
+    }
+    
+    if (hasClosingBrace) {
+      newLevel = Math.max(0, newLevel - 1);
+    }
+    
+    return newLevel;
+  }
+
+  private calculateJSONIndent(line: string, currentLevel: number): number {
+    // Chaves e colchetes de abertura aumentam a indentação
+    const hasOpeningBrace = line.includes('{') || line.includes('[');
+    
+    // Chaves e colchetes de fechamento diminuem a indentação
+    const hasClosingBrace = line.includes('}') || line.includes(']');
+    
+    let newLevel = currentLevel;
+    
+    if (hasOpeningBrace) {
+      newLevel++;
+    }
+    
+    if (hasClosingBrace) {
+      newLevel = Math.max(0, newLevel - 1);
+    }
+    
+    return newLevel;
+  }
+
+  private calculateBashIndent(line: string, currentLevel: number): number {
+    const lowerLine = line.toLowerCase();
+    
+    // Palavras que aumentam a indentação
+    const increaseIndent = /\b(if|then|else|elif|fi|for|while|do|done|case|esac)\b/;
+    
+    // Palavras que diminuem a indentação
+    const decreaseIndent = /\b(fi|done|esac)\b/;
+    
+    let newLevel = currentLevel;
+    
+    if (increaseIndent.test(lowerLine)) {
+      newLevel++;
+    }
+    
+    if (decreaseIndent.test(lowerLine)) {
+      newLevel = Math.max(0, newLevel - 1);
+    }
+    
+    return newLevel;
   }
 
   private showHelp(): void {
