@@ -190,6 +190,220 @@ export class CLI {
     console.log(chalk.hex('#10B981')('┌─ ') + chalk.white('Você: ') + chalk.hex('#10B981')('▸'));
   }
 
+  private async streamResponse(content: string): Promise<void> {
+    const terminalWidth = process.stdout.columns || 80;
+    const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
+    
+    console.log(chalk.gray(`━━${separator}━━`));
+    
+    // Detecta se há código na resposta
+    const codeBlocks = this.extractCodeBlocks(content);
+    
+    if (codeBlocks.length > 0) {
+      // Resposta com código - aplica syntax highlighting
+      await this.streamWithCodeHighlighting(content, codeBlocks);
+    } else {
+      // Resposta normal - stream simples
+      await this.streamText(content);
+    }
+    
+    console.log(chalk.gray(`━━${separator}━━`));
+    console.log('');
+  }
+
+  private extractCodeBlocks(content: string): Array<{language: string, code: string, start: number, end: number}> {
+    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+    const blocks: Array<{language: string, code: string, start: number, end: number}> = [];
+    let match;
+    
+    while ((match = codeBlockRegex.exec(content)) !== null) {
+      blocks.push({
+        language: match[1] || 'text',
+        code: match[2],
+        start: match.index,
+        end: match.index + match[0].length
+      });
+    }
+    
+    return blocks;
+  }
+
+  private async streamWithCodeHighlighting(content: string, codeBlocks: Array<{language: string, code: string, start: number, end: number}>): Promise<void> {
+    let currentPos = 0;
+    
+    for (const block of codeBlocks) {
+      // Stream texto antes do bloco de código
+      if (block.start > currentPos) {
+        const textBefore = content.substring(currentPos, block.start);
+        await this.streamText(textBefore);
+      }
+      
+      // Stream do bloco de código com syntax highlighting
+      await this.streamCodeBlock(block.language, block.code);
+      
+      currentPos = block.end;
+    }
+    
+    // Stream texto restante após o último bloco de código
+    if (currentPos < content.length) {
+      const remainingText = content.substring(currentPos);
+      await this.streamText(remainingText);
+    }
+  }
+
+  private async streamText(text: string): Promise<void> {
+    const words = text.split(' ');
+    
+    for (const word of words) {
+      process.stdout.write(chalk.yellow(word + ' '));
+      await this.delay(50); // Delay pequeno para efeito de stream
+    }
+    console.log(''); // Nova linha após o texto
+  }
+
+  private async streamCodeBlock(language: string, code: string): Promise<void> {
+    // Cabeçalho do bloco de código
+    console.log(chalk.hex('#6366F1')('```' + language));
+    
+    // Stream do código com syntax highlighting
+    const lines = code.split('\n');
+    
+    for (const line of lines) {
+      const highlightedLine = this.highlightSyntax(language, line);
+      process.stdout.write(highlightedLine + '\n');
+      await this.delay(20); // Stream mais rápido para código
+    }
+    
+    // Fechamento do bloco de código
+    console.log(chalk.hex('#6366F1')('```'));
+  }
+
+  private highlightSyntax(language: string, line: string): string {
+    // Syntax highlighting básico para linguagens comuns
+    switch (language.toLowerCase()) {
+      case 'javascript':
+      case 'js':
+      case 'typescript':
+      case 'ts':
+        return this.highlightJavaScript(line);
+      case 'python':
+      case 'py':
+        return this.highlightPython(line);
+      case 'html':
+        return this.highlightHTML(line);
+      case 'css':
+        return this.highlightCSS(line);
+      case 'json':
+        return this.highlightJSON(line);
+      case 'bash':
+      case 'shell':
+        return this.highlightBash(line);
+      default:
+        return chalk.white(line);
+    }
+  }
+
+  private highlightJavaScript(line: string): string {
+    // Keywords JavaScript/TypeScript
+    const keywords = /\b(const|let|var|function|if|else|for|while|return|class|import|export|from|default|async|await|try|catch|finally)\b/g;
+    const strings = /(["'`])((?:\\.|[^\\])*?)\1/g;
+    const numbers = /\b\d+\.?\d*\b/g;
+    const comments = /\/\/.*$/g;
+    
+    let highlighted = line;
+    
+    // Aplica highlighting
+    highlighted = highlighted.replace(keywords, chalk.hex('#FF6B6B')('$&'));
+    highlighted = highlighted.replace(strings, chalk.hex('#4ECDC4')('$&'));
+    highlighted = highlighted.replace(numbers, chalk.hex('#45B7D1')('$&'));
+    highlighted = highlighted.replace(comments, chalk.gray('$&'));
+    
+    return highlighted;
+  }
+
+  private highlightPython(line: string): string {
+    // Keywords Python
+    const keywords = /\b(def|class|if|elif|else|for|while|try|except|finally|with|import|from|as|return|yield|lambda|True|False|None)\b/g;
+    const strings = /(["'`])((?:\\.|[^\\])*?)\1/g;
+    const numbers = /\b\d+\.?\d*\b/g;
+    const comments = /#.*$/g;
+    
+    let highlighted = line;
+    
+    highlighted = highlighted.replace(keywords, chalk.hex('#FF6B6B')('$&'));
+    highlighted = highlighted.replace(strings, chalk.hex('#4ECDC4')('$&'));
+    highlighted = highlighted.replace(numbers, chalk.hex('#45B7D1')('$&'));
+    highlighted = highlighted.replace(comments, chalk.gray('$&'));
+    
+    return highlighted;
+  }
+
+  private highlightHTML(line: string): string {
+    // Tags HTML
+    const tags = /<[^>]*>/g;
+    const attributes = /\s(\w+)=/g;
+    const strings = /(["'])((?:\\.|[^\\])*?)\1/g;
+    
+    let highlighted = line;
+    
+    highlighted = highlighted.replace(tags, chalk.hex('#FF6B6B')('$&'));
+    highlighted = highlighted.replace(attributes, chalk.hex('#4ECDC4')(' $1='));
+    highlighted = highlighted.replace(strings, chalk.hex('#45B7D1')('$&'));
+    
+    return highlighted;
+  }
+
+  private highlightCSS(line: string): string {
+    // Propriedades CSS
+    const properties = /([a-zA-Z-]+):/g;
+    const values = /:\s*([^;]+);?/g;
+    const selectors = /([.#][a-zA-Z0-9_-]+)/g;
+    
+    let highlighted = line;
+    
+    highlighted = highlighted.replace(properties, chalk.hex('#FF6B6B')('$1:'));
+    highlighted = highlighted.replace(values, ': ' + chalk.hex('#4ECDC4')('$1'));
+    highlighted = highlighted.replace(selectors, chalk.hex('#45B7D1')('$1'));
+    
+    return highlighted;
+  }
+
+  private highlightJSON(line: string): string {
+    // Keys e valores JSON
+    const keys = /"([^"]+)":/g;
+    const strings = /"([^"]*)"/g;
+    const numbers = /\b\d+\.?\d*\b/g;
+    const booleans = /\b(true|false|null)\b/gi;
+    
+    let highlighted = line;
+    
+    highlighted = highlighted.replace(keys, chalk.hex('#FF6B6B')('"$1":'));
+    highlighted = highlighted.replace(strings, chalk.hex('#4ECDC4')('"$1"'));
+    highlighted = highlighted.replace(numbers, chalk.hex('#45B7D1')('$&'));
+    highlighted = highlighted.replace(booleans, chalk.hex('#FFA500')('$&'));
+    
+    return highlighted;
+  }
+
+  private highlightBash(line: string): string {
+    // Comandos bash
+    const commands = /^\s*(\w+)/g;
+    const flags = /(-\w+)/g;
+    const paths = /(\/[^\s]+)/g;
+    
+    let highlighted = line;
+    
+    highlighted = highlighted.replace(commands, chalk.hex('#FF6B6B')('$1'));
+    highlighted = highlighted.replace(flags, chalk.hex('#4ECDC4')('$1'));
+    highlighted = highlighted.replace(paths, chalk.hex('#45B7D1')('$1'));
+    
+    return highlighted;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   private showHelp(): void {
     const terminalWidth = process.stdout.columns || 80;
     const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
@@ -254,7 +468,7 @@ export class CLI {
       // Adiciona a mensagem do usuário ao contexto
       this.conversationContext.addMessage('user', input);
       
-      // Processa a query normalmente com o agente
+      // Processa a query com stream para resposta rápida
       const response = await this.agent.processQuery(input);
       
       // Para o spinner
@@ -263,23 +477,17 @@ export class CLI {
       // Adiciona a resposta do assistente ao contexto
       this.conversationContext.addMessage('assistant', response.content);
       
-      // Exibe a resposta com design minimalista e cor apropriada
-      const terminalWidth = process.stdout.columns || 80;
-      const separator = '─'.repeat(Math.max(terminalWidth - 2, 20));
-      console.log(chalk.gray(`━━${separator}━━`));
-      console.log(chalk.yellow(response.content)); // Cor amarela para as respostas do agente
+      // Exibe a resposta com stream e syntax highlighting
+      await this.streamResponse(response.content);
       
       // Se for uma resposta de código, oferece para salvar
       if (response.type === 'code') {
-        console.log(chalk.hex('#F59E0B')('\n💻 Code detected!'));
-        const shouldSave = await this.askForConfirmation('Save this code to a file?');
+        console.log(chalk.hex('#F59E0B')('\n💻 Código detectado!'));
+        const shouldSave = await this.askForConfirmation('Salvar este código em um arquivo?');
         if (shouldSave) {
           await this.saveCodeToFile(response.content);
         }
       }
-      
-      console.log(chalk.gray(`━━${separator}━━`));
-      console.log('');
       
       // Mostra claramente onde o usuário pode digitar novamente
       this.showInputPrompt();
